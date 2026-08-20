@@ -184,7 +184,12 @@ el mismo que hacerlo por el dashboard web:
 2. Importar el repo, **Root Directory** = `frontend` (`frontend/vercel.json`
    ya trae la config de framework/rewrites para SPA).
 3. Variable de entorno **Production**: `VITE_API_URL` = URL de Render del
-   paso 2 (sin barra final).
+   paso 2 **+ `/v1`** (ej. `https://TU_BACKEND.onrender.com/v1`) — el código
+   del frontend llama rutas relativas (`/auth/login`, `/documents`, etc.)
+   esperando que esta variable ya incluya el prefijo `/v1`; sin él, todo da
+   404. Costó un ciclo de deploy no ponerlo la primera vez — verificar
+   siempre con una prueba de login real en el navegador, no solo con curl a
+   `/v1/...` directo (eso enmascara el bug: la ruta absoluta sí existe).
 4. Deploy → dominio `https://TU_PROYECTO.vercel.app`.
 5. Volver a Render y actualizar `ALLOWED_ORIGINS` con ese dominio exacto
    (recordar: hace falta un deploy nuevo en Render, no solo guardar la
