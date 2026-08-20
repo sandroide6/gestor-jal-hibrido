@@ -43,6 +43,14 @@ else
   else
     echo "[entrypoint] PROXY_TARGET_HOST no configurado — no se levanta el forwarder de BD." >&2
   fi
+
+  # Mismo forwarder, segunda instancia para Ollama (11434 -> 11434). Mismo PC, mismo
+  # PROXY_TARGET_HOST — solo cambia el puerto. OLLAMA_URL debe apuntar a
+  # http://127.0.0.1:11434, igual que DATABASE_URL apunta a 127.0.0.1:5432.
+  if [ -n "$PROXY_TARGET_HOST" ] && [ -n "$OLLAMA_URL" ]; then
+    PROXY_LOCAL_PORT=11434 PROXY_TARGET_PORT=11434 PROXY_SOCKS_PORT="$SOCKS_PORT" \
+      node /app/tailscale-db-proxy.js &
+  fi
 fi
 
 exec node src/index.js

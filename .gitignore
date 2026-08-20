@@ -24,6 +24,7 @@ frontend/.vite/
 
 # Datos locales y backups
 backend/data/
+backups/
 scripts/.pids.json
 
 # Python
