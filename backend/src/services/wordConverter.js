@@ -78,6 +78,17 @@ class WordConverter {
         if (txt) console.warn('[wordConverter] stderr:', txt);
       });
 
+      // Sin este handler, un fallo al lanzar el proceso (ej. powershell.exe no existe,
+      // como en Linux) emite un evento 'error' sin listener — Node.js lo trata como
+      // excepción no capturada y tumba TODO el proceso, no solo esta conversión.
+      this._proc.on('error', (err) => {
+        clearTimeout(timer);
+        this._ready = false;
+        this._proc = null;
+        this._startPromise = null;
+        reject(new Error(`Word server no se pudo iniciar: ${err.message}`));
+      });
+
       this._proc.on('exit', (code) => {
         this._ready = false;
         this._proc = null;

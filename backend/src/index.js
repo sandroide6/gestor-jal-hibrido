@@ -14,10 +14,15 @@ const server = app.listen(PORT, BIND_HOST, () => {
   logger.info(`Entorno: ${process.env.NODE_ENV || 'development'}`);
   // Verificar backups automáticos cada 5 minutos
   setInterval(checkAutoBackups, 5 * 60 * 1000);
-  // Pre-calentar Word en segundo plano para que el primer documento sea rápido
-  wordConverter._ensureReady()
-    .then(() => logger.info('Word COM listo — conversiones PDF < 300 ms'))
-    .catch((err) => logger.warn('Word COM no disponible, se usará fallback', { message: err.message }));
+  // Pre-calentar Word en segundo plano para que el primer documento sea rápido —
+  // solo tiene sentido en Windows (Word COM). En Linux (Render) ni lo intenta: además
+  // de ser inútil ahí, un `spawn('powershell.exe', …)` que falla en un binario que no
+  // existe puede tumbar el proceso si algo no maneja el evento 'error' correctamente.
+  if (process.platform === 'win32') {
+    wordConverter._ensureReady()
+      .then(() => logger.info('Word COM listo — conversiones PDF < 300 ms'))
+      .catch((err) => logger.warn('Word COM no disponible, se usará fallback', { message: err.message }));
+  }
 });
 
 function shutdown(signal) {
