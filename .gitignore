@@ -43,6 +43,9 @@ desktop.ini
 *.swp
 *.swo
 
+# Estado local de la sesión de Claude Code — no es parte del proyecto
+.claude/
+
 # Documentos personales/oficiales sueltos en la raíz — no son código ni plantillas
 # genéricas del sistema, tienen datos reales de personas, no deben vivir en git.
 /*.docx
