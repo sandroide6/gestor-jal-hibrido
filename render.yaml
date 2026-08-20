@@ -41,6 +41,10 @@ services:
         sync: false
       - key: TS_HOSTNAME
         value: gestor-jal-backend
+      # IP/MagicDNS de Tailscale del PC local — destino real del forwarder
+      # local que expone DATABASE_URL en 127.0.0.1 (ver entrypoint.sh)
+      - key: PROXY_TARGET_HOST
+        sync: false
 
       # ── Almacenamiento — caché local no persistente en free tier ───
       - key: STORAGE_PATH

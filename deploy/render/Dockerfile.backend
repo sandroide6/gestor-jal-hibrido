@@ -48,6 +48,7 @@ COPY backend/seeders      ./seeders
 COPY backend/plantillas   ./plantillas
 COPY backend/package.json ./package.json
 COPY deploy/render/entrypoint.sh ./entrypoint.sh
+COPY deploy/render/tailscale-db-proxy.js ./tailscale-db-proxy.js
 RUN chmod +x ./entrypoint.sh
 
 # Directorio de datos: caché rápida local mientras el contenedor vive. No persiste

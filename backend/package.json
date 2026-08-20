@@ -42,6 +42,7 @@
     "qrcode": "^1.5.4",
     "sequelize": "^6.37.3",
     "sequelize-cli": "^6.6.2",
+    "socks": "^2.8.9",
     "speakeasy": "^2.0.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
