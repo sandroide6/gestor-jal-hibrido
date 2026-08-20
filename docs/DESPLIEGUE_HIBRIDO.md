@@ -141,7 +141,9 @@ etiquétalo con `tag:jal-backend` (se hace en el admin console, "Machines").
 
 1. Crea cuenta en https://render.com (gratis, sin tarjeta).
 2. Dashboard → **New** → **Blueprint** → conecta el repo de GitHub → Render
-   detecta `deploy/render/render.yaml` automáticamente.
+   detecta `render.yaml` automáticamente (tiene que estar en la raíz del repo
+   — si alguna vez lo mueves, hay un campo "Blueprint Path" en el mismo paso
+   para apuntarlo a otra ruta).
 3. Render te pedirá cada variable marcada `sync: false`. Usa
    `deploy/render/.env.example` como referencia de qué poner en cada una —
    en particular:
