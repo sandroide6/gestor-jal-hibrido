@@ -1,0 +1,4 @@
+.vercel
+
+# Service worker de desarrollo (vite-plugin-pwa) — se regenera al correr `npm run dev`
+dev-dist/

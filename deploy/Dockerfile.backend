@@ -1,0 +1,33 @@
+# ── Etapa 1: instalar solo dependencias de producción ────────────────────────
+FROM node:24-alpine AS deps
+WORKDIR /app
+COPY backend/package*.json ./
+RUN npm ci --omit=dev --ignore-scripts
+
+# ── Etapa 2: imagen de runtime mínima ────────────────────────────────────────
+FROM node:24-alpine AS runtime
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Herramientas mínimas: wget para el healthcheck
+RUN apk add --no-cache wget
+
+# Solo lo que necesita el servidor en runtime
+COPY --from=deps /app/node_modules ./node_modules
+COPY backend/src          ./src
+COPY backend/config       ./config
+COPY backend/migrations   ./migrations
+COPY backend/seeders      ./seeders
+COPY backend/plantillas   ./plantillas
+COPY backend/package.json ./package.json
+
+# El directorio de datos (documentos generados) se monta como volumen en docker-compose
+RUN mkdir -p /app/data/output /app/data/backups
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=15s --timeout=10s --start-period=30s --retries=5 \
+  CMD wget -qO- http://localhost:3001/health || exit 1
+
+CMD ["node", "src/index.js"]

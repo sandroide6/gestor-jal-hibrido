@@ -1,0 +1,14 @@
+# Secretos
+.env
+.env.local
+
+# Logs y datos
+logs/
+data/
+
+# Dependencias
+node_modules/
+
+# Artefactos generados (tests/debug) — no son código fuente
+coverage/
+test_firma_debug.docx

@@ -1,0 +1,28 @@
+'use strict';
+
+const E = {
+  // Auth
+  AUTH_INVALID_CREDENTIALS:  'AUTH_INVALID_CREDENTIALS',
+  AUTH_ACCOUNT_LOCKED:       'AUTH_ACCOUNT_LOCKED',
+  AUTH_TOKEN_INVALID:        'AUTH_TOKEN_INVALID',
+  AUTH_TOKEN_EXPIRED:        'AUTH_TOKEN_EXPIRED',
+  AUTH_TOKEN_REVOKED:        'AUTH_TOKEN_REVOKED',
+  AUTH_REFRESH_INVALID:      'AUTH_REFRESH_INVALID',
+  AUTH_2FA_INVALID:          'AUTH_2FA_INVALID',
+  AUTH_WRONG_PASSWORD:       'AUTH_WRONG_PASSWORD',
+
+  // Authorization
+  FORBIDDEN:                 'FORBIDDEN',
+  UNAUTHENTICATED:           'UNAUTHENTICATED',
+
+  // Resources
+  NOT_FOUND:                 'NOT_FOUND',
+  CONFLICT:                  'CONFLICT',
+  VALIDATION:                'VALIDATION',
+
+  // Server
+  INTERNAL:                  'INTERNAL',
+  RATE_LIMITED:              'RATE_LIMITED',
+};
+
+module.exports = E;

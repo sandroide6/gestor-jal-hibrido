@@ -1,0 +1,88 @@
+services:
+
+  # ── Base de datos PostgreSQL ─────────────────────────────────────────────────
+  db:
+    image: postgres:18-alpine
+    container_name: gestor-jal-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-gestor_jal}
+      POSTGRES_USER:     ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-gestor_jal}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [gestor-net]
+
+  # ── Backend Node.js + Express ────────────────────────────────────────────────
+  backend:
+    build:
+      context: ..                        # raíz del proyecto
+      dockerfile: deploy/Dockerfile.backend
+    image: gestor-jal-backend:latest
+    container_name: gestor-jal-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV:         production
+      PORT:             3001
+      DATABASE_URL:     postgresql://${DB_USER:-postgres}:${DB_PASSWORD}@db:5432/${DB_NAME:-gestor_jal}
+      DB_HOST:          db
+      DB_PORT:          5432
+      DB_NAME:          ${DB_NAME:-gestor_jal}
+      DB_USER:          ${DB_USER:-postgres}
+      DB_PASSWORD:      ${DB_PASSWORD}
+      JWT_SECRET:       ${JWT_SECRET}
+      ALLOWED_ORIGINS:  ${ALLOWED_ORIGINS:-http://localhost}
+      STORAGE_PATH:     /app/data/output
+      TEMPLATES_PATH:   /app/plantillas
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-20}
+      JAL_NOMBRE:       ${JAL_NOMBRE:-JAL}
+      JAL_NOMBRE_CORTO: ${JAL_NOMBRE_CORTO:-JAL}
+      NGROK_AUTHTOKEN:  ${NGROK_AUTHTOKEN:-}
+      NGROK_DOMAIN:     ${NGROK_DOMAIN:-}
+      GOOGLE_CLIENT_ID:     ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI:  ${GOOGLE_REDIRECT_URI:-http://localhost/v1/backup/drive/callback}
+      OLLAMA_URL:   ${OLLAMA_URL:-http://localhost:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      LOG_SQL: "false"
+    volumes:
+      - backend-data:/app/data          # documentos generados y backups locales
+      - backend-plantillas:/app/plantillas  # plantillas DOCX (actualizables sin rebuild)
+    networks: [gestor-net]
+    # El backend NO expone puertos al host — nginx es el único punto de entrada
+
+  # ── Frontend React servido por nginx ────────────────────────────────────────
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_API_URL:    /v1
+        VITE_JAL_NOMBRE: ${JAL_NOMBRE:-JAL}
+    image: gestor-jal-frontend:latest
+    container_name: gestor-jal-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks: [gestor-net]
+
+volumes:
+  pgdata:             # datos PostgreSQL — persisten entre reinicios y actualizaciones
+  backend-data:       # documentos generados y backups locales
+  backend-plantillas: # plantillas DOCX — se pueden actualizar sin rebuild de imagen
+
+networks:
+  gestor-net:
+    driver: bridge

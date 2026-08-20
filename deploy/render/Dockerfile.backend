@@ -1,0 +1,63 @@
+# Dockerfile del backend para el modo híbrido (Render + Tailscale).
+# Distinto de deploy/Dockerfile.backend (instalación on-prem con Docker Compose en un
+# solo PC): ese no necesita LibreOffice ni Tailscale porque backend y Postgres corren
+# en la misma máquina/red. Este sí, porque el backend corre en Render (Linux, sin
+# Word) y necesita alcanzar el Postgres del PC local a través del túnel.
+#
+# Base Debian (node:24-slim), no Alpine: el paquete libreoffice-writer de Debian/apt
+# es el camino soportado; en Alpine requeriría compilar o repos no oficiales.
+
+# ── Etapa 1: instalar solo dependencias de producción ────────────────────────
+FROM node:24-slim AS deps
+WORKDIR /app
+COPY backend/package*.json ./
+RUN npm ci --omit=dev --ignore-scripts
+
+# ── Etapa 2: imagen de runtime ────────────────────────────────────────────────
+FROM node:24-slim AS runtime
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV DEBIAN_FRONTEND=noninteractive
+
+# LibreOffice headless: conversión DOCX→PDF cuando no hay Word (ver
+# backend/src/services/libreOfficeConverter.js). curl/ca-certificates: para
+# descargar los binarios estáticos de Tailscale a continuación.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      libreoffice-writer \
+      curl \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Tailscale — binario estático oficial. Se usa en modo userspace-networking (ver
+# entrypoint.sh) porque contenedores como los de Render no exponen /dev/net/tun.
+ARG TAILSCALE_VERSION=1.76.1
+RUN curl -fsSL "https://pkgs.tailscale.com/stable/tailscale_${TAILSCALE_VERSION}_amd64.tgz" \
+      -o /tmp/tailscale.tgz \
+    && tar -xzf /tmp/tailscale.tgz -C /tmp \
+    && mv "/tmp/tailscale_${TAILSCALE_VERSION}_amd64/tailscale" /usr/local/bin/ \
+    && mv "/tmp/tailscale_${TAILSCALE_VERSION}_amd64/tailscaled" /usr/local/bin/ \
+    && rm -rf /tmp/tailscale*
+
+# Solo lo que necesita el servidor en runtime
+COPY --from=deps /app/node_modules ./node_modules
+COPY backend/src          ./src
+COPY backend/config       ./config
+COPY backend/migrations   ./migrations
+COPY backend/seeders      ./seeders
+COPY backend/plantillas   ./plantillas
+COPY backend/package.json ./package.json
+COPY deploy/render/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
+
+# Directorio de datos: caché rápida local mientras el contenedor vive. No persiste
+# entre redeploys/reinicios — por eso los documentos generados también se guardan en
+# Postgres (ver backend/migrations/20260101000025-add-file-bytes-to-documents.js).
+RUN mkdir -p /app/data/output /app/data/backups
+
+EXPOSE 3001
+
+HEALTHCHECK --interval=15s --timeout=10s --start-period=45s --retries=5 \
+  CMD curl -fsS http://localhost:3001/health || exit 1
+
+ENTRYPOINT ["./entrypoint.sh"]

@@ -1,0 +1,4 @@
+# Los scripts .sh corren dentro de contenedores Linux (deploy/render/entrypoint.sh) —
+# si git los guarda con CRLF (común al editar en Windows), el shebang falla dentro del
+# contenedor. Forzar LF sin importar la configuración local de autocrlf.
+*.sh text eol=lf

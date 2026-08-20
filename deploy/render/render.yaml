@@ -1,0 +1,69 @@
+# Blueprint de Render para el backend en modo híbrido.
+# Uso: en el dashboard de Render, "New" → "Blueprint" → conectar el repo → Render lee
+# este archivo y crea el servicio. Las variables con `sync: false` no se guardan en
+# git — Render las pide una a una la primera vez, tal como sus contrapartes en
+# deploy/render/.env.example.
+#
+# Ver docs/DESPLIEGUE_HIBRIDO.md para el detalle de cada variable.
+
+services:
+  - type: web
+    name: gestor-jal-backend
+    runtime: docker
+    dockerfilePath: ./deploy/render/Dockerfile.backend
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+
+      # ── Base de datos (Postgres local, vía Tailscale) ──────────────
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: "false"
+
+      # ── Seguridad ────────────────────────────────────────────────
+      - key: JWT_SECRET
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+
+      # ── CORS — dominio del frontend en Vercel ──────────────────────
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+      # ── Tailscale — conecta este contenedor al tailnet del PC local ─
+      - key: TS_AUTHKEY
+        sync: false
+      - key: TS_HOSTNAME
+        value: gestor-jal-backend
+
+      # ── Almacenamiento — caché local no persistente en free tier ───
+      - key: STORAGE_PATH
+        value: /app/data/output
+      - key: TEMPLATES_PATH
+        value: /app/plantillas
+
+      # ── Identidad de la JAL ─────────────────────────────────────────
+      - key: JAL_NOMBRE
+        sync: false
+      - key: JAL_NOMBRE_CORTO
+        sync: false
+
+      # ── Chat IA — Ollama local, vía el mismo túnel Tailscale (opcional) ─
+      - key: OLLAMA_URL
+        sync: false
+      - key: OLLAMA_MODEL
+        value: llama3.2:1b
+
+      # ── Backup Google Drive (opcional) ──────────────────────────────
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false

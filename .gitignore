@@ -1,0 +1,49 @@
+# Secretos — NUNCA subir al repositorio
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+deploy/.env
+deploy/.env.local
+deploy/render/.env
+deploy/render/.env.local
+
+# Dependencias
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Builds
+frontend/dist/
+frontend/.vite/
+
+# Datos locales y backups
+backend/data/
+scripts/.pids.json
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Documentos personales/oficiales sueltos en la raíz — no son código ni plantillas
+# genéricas del sistema, tienen datos reales de personas, no deben vivir en git.
+/*.docx
+/evidencia_informe/
