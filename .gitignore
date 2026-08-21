@@ -47,6 +47,9 @@ desktop.ini
 # Estado local de la sesión de Claude Code — no es parte del proyecto
 .claude/
 
+# Estado local de la CLI de Supabase
+supabase/.temp/
+
 # Documentos personales/oficiales sueltos en la raíz — no son código ni plantillas
 # genéricas del sistema, tienen datos reales de personas, no deben vivir en git.
 /*.docx
