@@ -20,8 +20,16 @@ const STATE_TYPE    = 'drive_oauth_state';
 // otra forma de saber qué JAL originó la solicitud) y sirve además como protección
 // CSRF: sin este token firmado, nadie puede completar el flujo de conexión en nombre
 // de otra JAL ni disparar el callback de forma independiente.
-function signOAuthState(jalId, userId) {
-  return jwt.sign({ type: STATE_TYPE, jal_id: jalId, sub: userId }, STATE_SECRET, {
+// `origin` viaja dentro del state para que el callback sepa a dónde volver. En modo
+// túnel local, backend y frontend comparten origen y una ruta relativa basta — pero en
+// modo híbrido (frontend en Vercel, backend en Render) son orígenes distintos, y
+// `res.redirect('/admin/...')` en el callback resolvería contra el propio backend (que
+// no sirve el frontend), no contra Vercel. Se valida contra ALLOWED_ORIGINS antes de
+// firmarlo para no abrir un open-redirect si algún día ese origin llega manipulado.
+function signOAuthState(jalId, userId, origin) {
+  const allowed = (process.env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim());
+  const safeOrigin = allowed.includes(origin) ? origin : null;
+  return jwt.sign({ type: STATE_TYPE, jal_id: jalId, sub: userId, origin: safeOrigin }, STATE_SECRET, {
     algorithm: 'HS256', expiresIn: '10m',
   });
 }
@@ -38,30 +46,35 @@ function verifyOAuthState(state) {
 // el flujo de conexión con Drive). El `state` firmado es lo que lo protege.
 router.get('/callback', async (req, res) => {
   const { code, error, state } = req.query;
-  if (error || !code) {
-    return res.redirect('/admin/configuracion/backup?error=auth_denied');
-  }
 
+  // Intenta recuperar el origin del state incluso en las ramas de error — sigue siendo
+  // mejor volver al dominio correcto con un ?error=... que aterrizar en el JSON crudo
+  // del backend.
+  let origin = null;
   let jalId;
   try {
-    ({ jal_id: jalId } = verifyOAuthState(state));
+    ({ jal_id: jalId, origin } = verifyOAuthState(state));
   } catch {
-    return res.redirect('/admin/configuracion/backup?error=invalid_state');
+    // state ausente/inválido: origin queda null, se usa ruta relativa como último recurso
   }
+  const goto = (qs) => res.redirect(`${origin || ''}/admin/configuracion/backup${qs}`);
+
+  if (error || !code) return goto('?error=auth_denied');
+  if (!jalId) return goto('?error=invalid_state');
 
   try {
     const redirectUri = `${req.protocol}://${req.get('host')}/v1/backup/drive/callback`;
     const tokens = await drive.exchangeCode(code, redirectUri);
 
     const jal = await Jal.findByPk(jalId);
-    if (!jal) return res.redirect('/admin/configuracion/backup?error=no_jal');
+    if (!jal) return goto('?error=no_jal');
     await Jal.update({
       config: { ...jal.config, drive_backup: { ...(jal.config?.drive_backup || {}), tokens: encryptJSON(tokens) } },
     }, { where: { id: jal.id } });
 
-    res.redirect('/admin/configuracion/backup?connected=1');
+    goto('?connected=1');
   } catch (err) {
-    res.redirect(`/admin/configuracion/backup?error=${encodeURIComponent(err.message)}`);
+    goto(`?error=${encodeURIComponent(err.message)}`);
   }
 });
 
@@ -128,7 +141,7 @@ router.get('/auth-url', (req, res) => {
     return res.status(503).json({ error: true, message: 'Configura GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en backend/.env' });
   }
   const redirectUri = `${req.protocol}://${req.get('host')}/v1/backup/drive/callback`;
-  const state = signOAuthState(req.user.jal_id, req.user.sub);
+  const state = signOAuthState(req.user.jal_id, req.user.sub, req.get('origin'));
   res.json({ url: drive.getAuthUrl(redirectUri, state) });
 });
 
