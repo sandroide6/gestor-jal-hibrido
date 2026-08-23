@@ -35,11 +35,11 @@ Documenta cómo quedó desplegado **frontend + backend en la nube**, con la
 ## Arquitectura
 
 ```
-┌─────────────┐        HTTPS         ┌──────────────────────────────┐
-│   Vercel    │ ───────────────────▶ │           Render              │
-│  (frontend, │   VITE_API_URL       │  backend Node + LibreOffice   │
-│  React/Vite)│ ◀─────────────────── │                                │
-└─────────────┘        JSON/API      └───────┬──────────────┬─────────┘
+┌─────────────┐   rewrite (mismo    ┌──────────────────────────────┐
+│   Vercel    │   origen para el    │           Render              │
+│  (frontend, │───navegador)───────▶│  backend Node + LibreOffice   │
+│  React/Vite)│◀────────────────────│                                │
+└─────────────┘  /v1/* → Render     └───────┬──────────────┬─────────┘
                                               │              │
                                     DATABASE_URL       (opcional)
                                     SSL, pooler         Tailscale
@@ -51,7 +51,17 @@ Documenta cómo quedó desplegado **frontend + backend en la nube**, con la
                                     └──────────────┘   └─────────────┘
 ```
 
-- El **frontend** (Vercel) solo habla HTTP/JSON con el backend.
+- El **frontend** (Vercel) nunca llama al dominio de Render directamente —
+  `frontend/vercel.json` reenvía (`rewrites`) `/v1/*` y `/health` al backend
+  real. Para el navegador, todo es el mismo origen (`*.vercel.app`).
+  **Esto no es cosmético**: sin el proxy, las cookies de sesión
+  (`access_token`/`refresh_token`/`csrf_token`) las pondría un dominio
+  distinto al que el usuario tiene abierto — cookies "de terceros" que los
+  navegadores modernos bloquean o aíslan por defecto. El síntoma real que
+  esto causó: el login parecía funcionar (el estado quedaba en memoria del
+  frontend), pero generar un documento fallaba con "Token CSRF inválido o
+  ausente" porque la cookie nunca llegaba de vuelta. Con el proxy, las tres
+  cookies quedan como cookies de primera parte del dominio de Vercel.
 - El **backend** (Render) se conecta directo a Supabase por TLS —
   conexión normal de Postgres, sin túnel ni proxy de por medio.
 - **Tailscale es opcional**: solo se necesita si usas el chat IA (Ollama
@@ -181,19 +191,37 @@ Hecho con la CLI (`npm install -g vercel`, `vercel login`, `vercel link`,
 el mismo que hacerlo por el dashboard web:
 
 1. Cuenta gratis en https://vercel.com.
-2. Importar el repo, **Root Directory** = `frontend` (`frontend/vercel.json`
-   ya trae la config de framework/rewrites para SPA).
-3. Variable de entorno **Production**: `VITE_API_URL` = URL de Render del
-   paso 2 **+ `/v1`** (ej. `https://TU_BACKEND.onrender.com/v1`) — el código
-   del frontend llama rutas relativas (`/auth/login`, `/documents`, etc.)
-   esperando que esta variable ya incluya el prefijo `/v1`; sin él, todo da
-   404. Costó un ciclo de deploy no ponerlo la primera vez — verificar
-   siempre con una prueba de login real en el navegador, no solo con curl a
-   `/v1/...` directo (eso enmascara el bug: la ruta absoluta sí existe).
-4. Deploy → dominio `https://TU_PROYECTO.vercel.app`.
-5. Volver a Render y actualizar `ALLOWED_ORIGINS` con ese dominio exacto
+2. Importar el repo, **Root Directory** = `frontend`.
+3. `frontend/vercel.json` ya trae dos cosas:
+   - El rewrite de SPA de siempre (`/(.*) → /index.html`).
+   - **Un proxy** `/v1/* → https://TU_BACKEND.onrender.com/v1/*` (y
+     `/health` igual) — con la URL de Render **hardcodeada** en ese archivo
+     (actualízala si cambias de backend). Esto hace que, para el navegador,
+     frontend y backend sean el mismo origen.
+4. Variable de entorno **Production**: `VITE_API_URL=/v1` — **relativa**, NO
+   la URL de Render. El código del frontend llama rutas relativas
+   (`/auth/login`, `/documents`, etc.) esperando el prefijo `/v1`; el
+   `fetch` sale hacia el propio dominio de Vercel, que el rewrite del paso 3
+   reenvía a Render por dentro, sin que el navegador se entere.
+5. Deploy → dominio `https://TU_PROYECTO.vercel.app`.
+6. Volver a Render y actualizar `ALLOWED_ORIGINS` con ese dominio exacto —
+   ya no es estrictamente necesario para el tráfico normal (el proxy lo
+   hace same-origin), pero sigue haciendo falta para pruebas directas
+   (curl, Postman) contra el dominio de Render sin pasar por el proxy.
    (recordar: hace falta un deploy nuevo en Render, no solo guardar la
    variable, para que el backend la relea — ver sección 2).
+
+**Error real: `VITE_API_URL` apuntando directo a Render (sin el proxy).**
+Es la primera forma en que se desplegó esto y *funciona* — el login pasa,
+la app carga — pero **genera documentos falla con "Token CSRF inválido o
+ausente"**. La causa: las cookies de sesión las pone entonces el dominio de
+Render, un origen distinto al de Vercel que el usuario tiene abierto —
+cookies "de terceros" que Chrome/Safari/Firefox bloquean o aíslan cada vez
+más agresivo por defecto. El login "funciona" porque el estado de sesión
+queda cacheado en memoria del frontend, no porque las cookies realmente se
+estén guardando. Solo se nota al intentar una petición mutante real. Fix:
+el proxy de Vercel del paso 3 (`VITE_API_URL=/v1` + rewrite), no cambios en
+el backend.
 
 **Error real: cuenta equivocada.** Si el proyecto se crea mientras el
 navegador tiene otra sesión de Google iniciada (ej. un dispositivo
