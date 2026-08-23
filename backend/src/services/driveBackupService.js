@@ -86,6 +86,78 @@ async function getOrCreateFolder(drive) {
   return folder.data.id;
 }
 
+const DOCS_FOLDER_NAME = 'Documentos generados';
+
+async function getOrCreateSubfolder(drive, parentId, name) {
+  const res = await drive.files.list({
+    q: `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+    fields: 'files(id, name)',
+  });
+  if (res.data.files.length) return res.data.files[0].id;
+  const folder = await drive.files.create({
+    requestBody: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+    fields: 'id',
+  });
+  return folder.data.id;
+}
+
+// Sube el DOCX/PDF de un documento recién generado a Drive, en una subcarpeta separada
+// de los backups periódicos. Deliberadamente silencioso si Drive no está conectado (es
+// el caso normal para JALs que no configuraron esta función) y no relanza errores — no
+// debe tumbar ni retrasar la respuesta de "documento creado" al usuario; se llama
+// fire-and-forget desde documentService.js después de que la transacción ya confirmó.
+async function uploadGeneratedDocument(jalId, doc, docxBuffer, pdfBuffer) {
+  const jal = await Jal.findByPk(jalId);
+  const cfg = jal?.config?.drive_backup || {};
+  const tokens = decryptTokens(cfg.tokens);
+  if (!tokens) return;
+
+  try {
+    const client = await getAuthedClient(tokens);
+    const drive  = google.drive({ version: 'v3', auth: client });
+
+    const rootFolderId = cfg.folder_id || await getOrCreateFolder(drive);
+    const docsFolderId = cfg.docs_folder_id || await getOrCreateSubfolder(drive, rootFolderId, DOCS_FOLDER_NAME);
+
+    if (!cfg.folder_id || !cfg.docs_folder_id) {
+      const fresh = await Jal.findByPk(jalId);
+      await Jal.update({
+        config: {
+          ...fresh.config,
+          drive_backup: { ...(fresh.config?.drive_backup || {}), folder_id: rootFolderId, docs_folder_id: docsFolderId },
+        },
+      }, { where: { id: jalId } });
+    }
+
+    const baseName = `${doc.numero_radicado || doc.id}_${(doc.beneficiary_name || 'documento').replace(/[^a-zA-Z0-9_-]+/g, '_')}`;
+    const uploads = [];
+
+    if (docxBuffer) {
+      const stream = new Readable(); stream.push(docxBuffer); stream.push(null);
+      uploads.push(drive.files.create({
+        requestBody: { name: `${baseName}.docx`, parents: [docsFolderId] },
+        media: { mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', body: stream },
+        fields: 'id',
+      }));
+    }
+    if (pdfBuffer) {
+      const stream = new Readable(); stream.push(pdfBuffer); stream.push(null);
+      uploads.push(drive.files.create({
+        requestBody: { name: `${baseName}.pdf`, parents: [docsFolderId] },
+        media: { mimeType: 'application/pdf', body: stream },
+        fields: 'id',
+      }));
+    }
+
+    await Promise.all(uploads);
+    logger.info('Documento subido a Google Drive', { jalId, documentId: doc.id });
+  } catch (err) {
+    logger.error('uploadGeneratedDocument: fallo subiendo documento a Drive', {
+      jalId, documentId: doc.id, error: err.message,
+    });
+  }
+}
+
 async function buildBackupBuffer(jalId) {
   const [docs, docTypes] = await Promise.all([
     Document.findAll({ where: { jal_id: jalId } }),
@@ -328,4 +400,4 @@ async function checkAutoBackups() {
   }
 }
 
-module.exports = { getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, getLocalBackupsPath, decryptTokens };
+module.exports = { getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument };

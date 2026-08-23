@@ -6,6 +6,8 @@ const documentGeneratorService = require('./documentGeneratorService');
 const radicadoService = require('./radicadoService');
 const documentNumberService = require('./documentNumberService');
 const audit = require('./auditService');
+const driveBackupService = require('./driveBackupService');
+const logger = require('../config/logger');
 
 const MAX_SIGNATURE_MB = parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10);
 const ALLOWED_SIGNATURE_MIME = ['image/png', 'image/jpeg'];
@@ -121,6 +123,8 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
 
   let doc;
   let numeroRadicado;
+  let docxBuffer;
+  let pdfBuffer;
 
   // El radicado se reclama, el archivo se genera y el documento se inserta dentro de la
   // MISMA transacción: si la generación del DOCX/PDF o el INSERT fallan, la transacción
@@ -135,7 +139,8 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
     });
     templateData.numero_radicado = numeroRadicado;
 
-    const { docxPath, pdfPath, docxBuffer, pdfBuffer } = await documentGeneratorService.generateDocuments({
+    let docxPath, pdfPath;
+    ({ docxPath, pdfPath, docxBuffer, pdfBuffer } = await documentGeneratorService.generateDocuments({
       jalId,
       jalName: jal.name,
       docType: {
@@ -149,7 +154,7 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       signaturePath,
       signatureBuffer,
       signatureMime,
-    });
+    }));
 
     const documentNumber = await documentNumberService.assignDocumentNumber({ jalId, transaction: t });
 
@@ -176,6 +181,14 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       tipo_tramite: docType.tipo_tramite,
     }, { transaction: t });
   });
+
+  // Fire-and-forget: si la JAL tiene Drive conectado, sube el DOCX/PDF ya generado.
+  // No se espera (`await`) ni se propaga su error — no debe retrasar ni tumbar la
+  // respuesta de "documento creado" por un problema de red/cuota con Drive.
+  driveBackupService.uploadGeneratedDocument(jalId, doc, docxBuffer, pdfBuffer)
+    .catch((err) => logger.error('documentService: fallo subiendo documento a Drive', {
+      documentId: doc.id, error: err.message,
+    }));
 
   await audit.log({
     userId,
