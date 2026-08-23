@@ -7,6 +7,7 @@ const radicadoService = require('./radicadoService');
 const documentNumberService = require('./documentNumberService');
 const audit = require('./auditService');
 const driveBackupService = require('./driveBackupService');
+const localDocSyncService = require('./localDocSyncService');
 const logger = require('../config/logger');
 
 const MAX_SIGNATURE_MB = parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10);
@@ -195,6 +196,12 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       });
     })
     .catch((err) => logger.error('documentService: fallo subiendo documento a Drive', {
+      documentId: doc.id, error: err.message,
+    }));
+
+  // Igual patrón, para el receptor local en el PC del usuario (recibir_documentos.bat).
+  localDocSyncService.syncToLocalReceiver(jalId, doc, docxBuffer, pdfBuffer)
+    .catch((err) => logger.error('documentService: fallo sincronizando documento al PC local', {
       documentId: doc.id, error: err.message,
     }));
 

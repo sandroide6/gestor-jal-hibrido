@@ -36,16 +36,24 @@ services:
       - key: ALLOWED_ORIGINS
         sync: false
 
-      # ── Tailscale — opcional, solo para el chat IA (Ollama) ─────────
-      # La base de datos ya no pasa por aquí (vive en Supabase). Deja
-      # TS_AUTHKEY vacío si no usas el chat.
+      # ── Tailscale — opcional, para el chat IA (Ollama) y/o el receptor
+      # local de documentos. La base de datos ya no pasa por aquí (vive en
+      # Supabase). Deja TS_AUTHKEY vacío si no usas ninguno de los dos.
       - key: TS_AUTHKEY
         sync: false
       - key: TS_HOSTNAME
         value: gestor-jal-backend
-      # IP/MagicDNS de Tailscale del PC local — destino del forwarder de
-      # Ollama (ver entrypoint.sh)
+      # IP/MagicDNS de Tailscale del PC local — destino de los forwarders
+      # de Ollama y del receptor de documentos (ver entrypoint.sh)
       - key: PROXY_TARGET_HOST
+        sync: false
+
+      # ── Receptor local de documentos (opcional) ──────────────────────
+      # Cada documento generado se envía en tiempo real a
+      # recibir_documentos.bat en el PC. Deja ambas vacías si no lo usas.
+      - key: LOCAL_DOC_RECEIVER_URL
+        sync: false
+      - key: LOCAL_DOC_RECEIVER_TOKEN
         sync: false
 
       # ── Almacenamiento — caché local no persistente en free tier ───
