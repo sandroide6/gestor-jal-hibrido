@@ -184,8 +184,16 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
 
   // Fire-and-forget: si la JAL tiene Drive conectado, sube el DOCX/PDF ya generado.
   // No se espera (`await`) ni se propaga su error — no debe retrasar ni tumbar la
-  // respuesta de "documento creado" por un problema de red/cuota con Drive.
+  // respuesta de "documento creado" por un problema de red/cuota con Drive. Los IDs de
+  // Drive se guardan en `metadata` (sin migración: reutiliza la columna JSONB existente)
+  // para poder borrar el archivo de Drive si luego se borra el documento.
   driveBackupService.uploadGeneratedDocument(jalId, doc, docxBuffer, pdfBuffer)
+    .then((result) => {
+      if (!result) return;
+      return doc.update({
+        metadata: { ...doc.metadata, drive_file_id_docx: result.docxFileId, drive_file_id_pdf: result.pdfFileId },
+      });
+    })
     .catch((err) => logger.error('documentService: fallo subiendo documento a Drive', {
       documentId: doc.id, error: err.message,
     }));
@@ -292,6 +300,14 @@ async function deleteDocument(id, jalId, deletedBy, ip) {
   for (const filePath of [doc.file_path_docx, doc.file_path_pdf]) {
     if (filePath) { try { fs.unlinkSync(filePath); } catch {} }
   }
+
+  // Fire-and-forget: propaga el borrado a la copia en Drive (si se subió una). No
+  // bloquea ni puede hacer fallar el borrado del documento en la app.
+  driveBackupService
+    .deleteDriveFiles(jalId, [doc.metadata?.drive_file_id_docx, doc.metadata?.drive_file_id_pdf])
+    .catch((err) => logger.error('documentService: fallo borrando documento de Drive', {
+      documentId: id, error: err.message,
+    }));
 
   await doc.destroy(); // soft-delete via paranoid
 

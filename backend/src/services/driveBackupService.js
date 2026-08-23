@@ -130,31 +130,55 @@ async function uploadGeneratedDocument(jalId, doc, docxBuffer, pdfBuffer) {
     }
 
     const baseName = `${doc.numero_radicado || doc.id}_${(doc.beneficiary_name || 'documento').replace(/[^a-zA-Z0-9_-]+/g, '_')}`;
-    const uploads = [];
+    const uploads = {};
 
     if (docxBuffer) {
       const stream = new Readable(); stream.push(docxBuffer); stream.push(null);
-      uploads.push(drive.files.create({
+      uploads.docx = drive.files.create({
         requestBody: { name: `${baseName}.docx`, parents: [docsFolderId] },
         media: { mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', body: stream },
         fields: 'id',
-      }));
+      });
     }
     if (pdfBuffer) {
       const stream = new Readable(); stream.push(pdfBuffer); stream.push(null);
-      uploads.push(drive.files.create({
+      uploads.pdf = drive.files.create({
         requestBody: { name: `${baseName}.pdf`, parents: [docsFolderId] },
         media: { mimeType: 'application/pdf', body: stream },
         fields: 'id',
-      }));
+      });
     }
 
-    await Promise.all(uploads);
+    const [docxRes, pdfRes] = await Promise.all([uploads.docx, uploads.pdf]);
     logger.info('Documento subido a Google Drive', { jalId, documentId: doc.id });
+    return { docxFileId: docxRes?.data?.id || null, pdfFileId: pdfRes?.data?.id || null };
   } catch (err) {
     logger.error('uploadGeneratedDocument: fallo subiendo documento a Drive', {
       jalId, documentId: doc.id, error: err.message,
     });
+    return null;
+  }
+}
+
+// Borra (best-effort) los archivos de Drive asociados a un documento — llamado desde
+// documentService.deleteDocument() cuando el usuario borra un documento en la app, para
+// que el borrado se propague a la copia en Drive. Si Drive no está conectado, el archivo
+// ya no existe ahí, o falla la llamada, no relanza — el borrado del documento en la app
+// no debe fallar por un problema de Drive.
+async function deleteDriveFiles(jalId, driveFileIds = []) {
+  const ids = driveFileIds.filter(Boolean);
+  if (!ids.length) return;
+
+  const jal = await Jal.findByPk(jalId);
+  const tokens = decryptTokens(jal?.config?.drive_backup?.tokens);
+  if (!tokens) return;
+
+  try {
+    const client = await getAuthedClient(tokens);
+    const drive  = google.drive({ version: 'v3', auth: client });
+    await Promise.all(ids.map((id) => drive.files.delete({ fileId: id }).catch(() => {})));
+  } catch (err) {
+    logger.error('deleteDriveFiles: fallo borrando archivos de Drive', { jalId, error: err.message });
   }
 }
 
@@ -400,4 +424,4 @@ async function checkAutoBackups() {
   }
 }
 
-module.exports = { getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument };
+module.exports = { getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };
