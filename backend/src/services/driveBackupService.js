@@ -101,6 +101,22 @@ async function getOrCreateSubfolder(drive, parentId, name) {
   return folder.data.id;
 }
 
+// Crea (o reutiliza) una cadena de subcarpetas anidadas, una llamada por nivel — mismo
+// patrón tipo/fecha/beneficiario que scripts/local_doc_receiver.js usa en el PC local,
+// para que ambos destinos queden organizados igual.
+async function getOrCreateNestedFolder(drive, rootId, segments) {
+  let parentId = rootId;
+  for (const segment of segments) {
+    parentId = await getOrCreateSubfolder(drive, parentId, segment);
+  }
+  return parentId;
+}
+
+function safeSegment(value, fallback) {
+  const s = String(value ?? fallback);
+  return s.replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 80) || fallback;
+}
+
 // Sube el DOCX/PDF de un documento recién generado a Drive, en una subcarpeta separada
 // de los backups periódicos. Deliberadamente silencioso si Drive no está conectado (es
 // el caso normal para JALs que no configuraron esta función) y no relanza errores — no
@@ -129,13 +145,23 @@ async function uploadGeneratedDocument(jalId, doc, docxBuffer, pdfBuffer) {
       }, { where: { id: jalId } });
     }
 
-    const baseName = `${doc.numero_radicado || doc.id}_${(doc.beneficiary_name || 'documento').replace(/[^a-zA-Z0-9_-]+/g, '_')}`;
+    // Misma estructura tipo/fecha/beneficiario que scripts/local_doc_receiver.js —
+    // decisión explícita del usuario para que Drive y el PC local queden organizados
+    // igual.
+    const dateFolder = new Date().toISOString().slice(0, 10);
+    const targetFolderId = await getOrCreateNestedFolder(drive, docsFolderId, [
+      safeSegment(doc.doc_type_name, 'documento'),
+      dateFolder,
+      safeSegment(doc.beneficiary_id, 'sin_id'),
+    ]);
+
+    const baseName = doc.numero_radicado || doc.id;
     const uploads = {};
 
     if (docxBuffer) {
       const stream = new Readable(); stream.push(docxBuffer); stream.push(null);
       uploads.docx = drive.files.create({
-        requestBody: { name: `${baseName}.docx`, parents: [docsFolderId] },
+        requestBody: { name: `${baseName}.docx`, parents: [targetFolderId] },
         media: { mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', body: stream },
         fields: 'id',
       });
@@ -143,7 +169,7 @@ async function uploadGeneratedDocument(jalId, doc, docxBuffer, pdfBuffer) {
     if (pdfBuffer) {
       const stream = new Readable(); stream.push(pdfBuffer); stream.push(null);
       uploads.pdf = drive.files.create({
-        requestBody: { name: `${baseName}.pdf`, parents: [docsFolderId] },
+        requestBody: { name: `${baseName}.pdf`, parents: [targetFolderId] },
         media: { mimeType: 'application/pdf', body: stream },
         fields: 'id',
       });
