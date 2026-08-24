@@ -8,7 +8,11 @@ describe('useAsync', () => {
       useAsync(() => new Promise(() => {}), [])
     );
     expect(result.current.loading).toBe(true);
-    expect(result.current.data).toBeNull();
+    // undefined, no null: los componentes que consumen este hook destructuran con un
+    // valor por defecto (`const { data: x = [] } = useAsync(...)`), y ese default solo
+    // se aplica con `undefined` — con `null` explícito, un `.filter()/.map()` posterior
+    // sobre `x` tumbaba la página (ver EdilPage/ReportsPage/AuditLogsPage).
+    expect(result.current.data).toBeUndefined();
     expect(result.current.error).toBe('');
   });
 
@@ -26,7 +30,7 @@ describe('useAsync', () => {
       useAsync(() => Promise.reject(new Error('Fallo de red')), [])
     );
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.data).toBeNull();
+    expect(result.current.data).toBeUndefined();
     expect(result.current.error).toBe('Fallo de red');
   });
 

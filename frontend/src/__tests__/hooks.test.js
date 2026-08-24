@@ -30,7 +30,8 @@ describe('useDocTypes', () => {
     fetchDocTypes.mockReturnValue(new Promise(() => {}));
     const { result } = renderHook(() => useDocTypes(TOKEN));
     expect(result.current.loading).toBe(true);
-    expect(result.current.data).toBeNull();
+    // undefined, no null: ver el comentario en useAsync.js / useAsync.test.js.
+    expect(result.current.data).toBeUndefined();
   });
 
   it('resuelve el array de tipos de documento', async () => {
@@ -46,7 +47,7 @@ describe('useDocTypes', () => {
     fetchDocTypes.mockRejectedValue(new Error('Sin conexión'));
     const { result } = renderHook(() => useDocTypes(TOKEN));
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(result.current.data).toBeNull();
+    expect(result.current.data).toBeUndefined();
     expect(result.current.error).toBe('Sin conexión');
   });
 });
