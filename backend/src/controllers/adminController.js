@@ -3,8 +3,15 @@ const { getIp } = require('../utils/request');
 const fs = require('fs');
 const path = require('path');
 const { Op } = require('sequelize');
-const PizZip = require('pizzip');
-const ExcelJS = require('exceljs');
+// pizzip/exceljs son pesados de requerir y este controlador se importa siempre al
+// arrancar (vía las rutas). Diferirlos hasta el primer uso real recorta el tiempo hasta
+// el primer app.listen(); require() ya cachea el módulo tras la primera llamada.
+function getPizZip() {
+  return require('pizzip');
+}
+function getExcelJS() {
+  return require('exceljs');
+}
 const schemas = require('../validations/admin');
 const { Document, DocType, User, AuditLog, sequelize } = require('../models');
 const audit = require('../services/auditService');
@@ -68,6 +75,7 @@ async function backup(req, res, next) {
       User.findAll({ where: { jal_id: jalId } }),
     ]);
 
+    const PizZip = getPizZip();
     const zip = new PizZip();
 
     // ── Manifiestos JSON ─────────────────────────────────────
@@ -202,6 +210,7 @@ async function auditLogs(req, res, next) {
 }
 
 async function buildExcelReport(docs) {
+  const ExcelJS = getExcelJS();
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Gestor JAL';
   wb.created = new Date();
@@ -269,6 +278,7 @@ async function exportData(req, res, next) {
       order: [['created_at', 'DESC']],
     });
 
+    const PizZip = getPizZip();
     const zip = new PizZip();
 
     const xlsxBuffer = await buildExcelReport(docs);

@@ -10,8 +10,6 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
 
-const swaggerUi          = require('swagger-ui-express');
-const swaggerSpec        = require('./swagger');
 const healthRouter       = require('./routes/health');
 const authRouter         = require('./routes/auth');
 const documentsRouter    = require('./routes/documents');
@@ -124,6 +122,11 @@ app.use('/v1/chat',          chatRouter);
 app.use('/v1/backup/drive', backupRouter);
 
 if (process.env.NODE_ENV !== 'production') {
+  // require() adentro del if, no arriba del archivo: en producción (Render) esto nunca
+  // se usa, así que no tiene sentido pagar el costo de cargar swagger-ui-express (trae
+  // sus propios assets estáticos embebidos) en cada arranque del proceso.
+  const swaggerUi   = require('swagger-ui-express');
+  const swaggerSpec = require('./swagger');
   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { customSiteTitle: 'JAL API Docs' }));
   app.get('/api-docs.json', (_req, res) => res.json(swaggerSpec));
 }

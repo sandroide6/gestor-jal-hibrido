@@ -7,7 +7,7 @@ import { useSyncStore } from '../../stores/syncStore';
 
 const MESSAGES = {
   degraded: 'Base de datos no disponible en este momento — algunas funciones no funcionarán hasta que se restablezca.',
-  unreachable: 'No se pudo contactar al servidor — reintentando…',
+  unreachable: 'Despertando el servidor (puede tardar unos segundos tras un período sin uso) — reintentando…',
 };
 
 const POLL_MS = 5000;

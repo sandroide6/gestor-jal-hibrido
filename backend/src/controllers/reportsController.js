@@ -1,6 +1,11 @@
 'use strict';
 const { getIp } = require('../utils/request');
-const ExcelJS = require('exceljs');
+// exceljs es pesado de requerir y este controlador se importa siempre al arrancar (vía
+// las rutas). Diferirlo hasta la primera exportación a Excel recorta el tiempo hasta el
+// primer app.listen(); require() ya cachea el módulo tras la primera llamada.
+function getExcelJS() {
+  return require('exceljs');
+}
 const { Op } = require('sequelize');
 const { Document, DocType, User } = require('../models');
 const audit = require('../services/auditService');
@@ -36,6 +41,7 @@ async function exportDocuments(req, res, next) {
       order: [['created_at', 'DESC']],
     });
 
+    const ExcelJS = getExcelJS();
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Gestor JAL';
     wb.created = new Date();

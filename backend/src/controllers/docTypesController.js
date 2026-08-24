@@ -3,7 +3,12 @@ const { getIp } = require('../utils/request');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
-const PizZip = require('pizzip');
+// pizzip es pesado de requerir y este controlador se importa siempre al arrancar (vía
+// las rutas). Diferirlo hasta el primer uso real recorta el tiempo hasta el primer
+// app.listen(); require() ya cachea el módulo tras la primera llamada.
+function getPizZip() {
+  return require('pizzip');
+}
 const docTypes = require('../services/docTypesService');
 const audit = require('../services/auditService');
 
@@ -13,6 +18,7 @@ const TEMPLATES_ROOT = path.resolve(path.join(__dirname, '..', '..', 'plantillas
 
 function extractDocxVariables(buffer) {
   try {
+    const PizZip = getPizZip();
     const zip = new PizZip(buffer);
     const xml = zip.file('word/document.xml')?.asText() || '';
     const clean = xml.replace(/<[^>]+>/g, '');

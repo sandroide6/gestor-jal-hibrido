@@ -1,7 +1,11 @@
 'use strict';
 const { v4: uuidv4 } = require('uuid');
 const { Document, DocType, Jal, User, SyncQueue } = require('../models');
-const documentGeneratorService = require('./documentGeneratorService');
+// Ver el mismo comentario en documentService.js — diferido para no pagar el costo de
+// requerir docx/pdf-lib/docxtemplater/mammoth/pizzip en cada arranque del proceso.
+function getDocumentGeneratorService() {
+  return require('./documentGeneratorService');
+}
 const radicadoService = require('./radicadoService');
 const documentNumberService = require('./documentNumberService');
 const audit = require('./auditService');
@@ -62,7 +66,7 @@ async function processDocumentCreate({ localId, data, userId, jalId, ip }) {
     });
     templateData.numero_radicado = numeroRadicado;
 
-    const { docxPath, pdfPath } = await documentGeneratorService.generateDocuments({
+    const { docxPath, pdfPath } = await getDocumentGeneratorService().generateDocuments({
       jalId,
       jalName: jal.name,
       docType: { id: docType.id, name: docType.name, fields: docType.fields, template_path: docType.template_path, template_data: docType.template_data },

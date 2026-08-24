@@ -13,7 +13,22 @@ WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev --ignore-scripts
 
-# ── Etapa 2: imagen de runtime ────────────────────────────────────────────────
+# ── Etapa 2: descargar Tailscale (curl/ca-certificates solo existen en esta etapa
+# intermedia, se descartan al final del build — no quedan en la imagen final) ──
+FROM node:24-slim AS tailscale-fetch
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl \
+      ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+ARG TAILSCALE_VERSION=1.76.1
+RUN curl -fsSL "https://pkgs.tailscale.com/stable/tailscale_${TAILSCALE_VERSION}_amd64.tgz" \
+      -o /tmp/tailscale.tgz \
+    && tar -xzf /tmp/tailscale.tgz -C /tmp \
+    && mv "/tmp/tailscale_${TAILSCALE_VERSION}_amd64/tailscale" /usr/local/bin/tailscale \
+    && mv "/tmp/tailscale_${TAILSCALE_VERSION}_amd64/tailscaled" /usr/local/bin/tailscaled \
+    && rm -rf /tmp/tailscale*
+
+# ── Etapa 3: imagen de runtime ────────────────────────────────────────────────
 FROM node:24-slim AS runtime
 WORKDIR /app
 
@@ -21,23 +36,17 @@ ENV NODE_ENV=production
 ENV DEBIAN_FRONTEND=noninteractive
 
 # LibreOffice headless: conversión DOCX→PDF cuando no hay Word (ver
-# backend/src/services/libreOfficeConverter.js). curl/ca-certificates: para
-# descargar los binarios estáticos de Tailscale a continuación.
+# backend/src/services/libreOfficeConverter.js). curl/ca-certificates ya NO se instalan
+# aquí: solo hacían falta para descargar Tailscale (etapa aparte) y para el HEALTHCHECK
+# (ahora hecho con el Node ya presente en la imagen, sin depender de curl).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       libreoffice-writer \
-      curl \
-      ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Tailscale — binario estático oficial. Se usa en modo userspace-networking (ver
-# entrypoint.sh) porque contenedores como los de Render no exponen /dev/net/tun.
-ARG TAILSCALE_VERSION=1.76.1
-RUN curl -fsSL "https://pkgs.tailscale.com/stable/tailscale_${TAILSCALE_VERSION}_amd64.tgz" \
-      -o /tmp/tailscale.tgz \
-    && tar -xzf /tmp/tailscale.tgz -C /tmp \
-    && mv "/tmp/tailscale_${TAILSCALE_VERSION}_amd64/tailscale" /usr/local/bin/ \
-    && mv "/tmp/tailscale_${TAILSCALE_VERSION}_amd64/tailscaled" /usr/local/bin/ \
-    && rm -rf /tmp/tailscale*
+# Binarios de Tailscale copiados desde la etapa de descarga — mismo resultado que antes,
+# sin dejar curl/ca-certificates instalados en la imagen final.
+COPY --from=tailscale-fetch /usr/local/bin/tailscale   /usr/local/bin/tailscale
+COPY --from=tailscale-fetch /usr/local/bin/tailscaled  /usr/local/bin/tailscaled
 
 # Solo lo que necesita el servidor en runtime
 COPY --from=deps /app/node_modules ./node_modules
@@ -58,7 +67,9 @@ RUN mkdir -p /app/data/output /app/data/backups
 
 EXPOSE 3001
 
+# Antes usaba curl; ahora usa el Node ya presente en la imagen para no tener que instalar
+# curl/ca-certificates en el runtime (ver etapa tailscale-fetch más arriba).
 HEALTHCHECK --interval=15s --timeout=10s --start-period=45s --retries=5 \
-  CMD curl -fsS http://localhost:3001/health || exit 1
+  CMD node -e "require('http').get('http://localhost:3001/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
 
 ENTRYPOINT ["./entrypoint.sh"]

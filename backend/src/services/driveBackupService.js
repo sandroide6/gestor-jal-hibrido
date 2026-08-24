@@ -1,12 +1,22 @@
 'use strict';
-const { google } = require('googleapis');
 const { Readable } = require('stream');
 const fs = require('fs');
 const path = require('path');
-const PizZip = require('pizzip');
 const { Document, DocType, User, Jal, BackupLog } = require('../models');
 const { decryptJSON } = require('../utils/crypto');
 const logger = require('../config/logger');
+
+// googleapis y pizzip son pesados de cargar (googleapis en particular, por su enorme
+// discovery doc embebido) y este servicio se importa siempre al arrancar (via las rutas
+// de backup). Cargarlos perezosamente — solo cuando de verdad se usan, no en cada
+// arranque del proceso — recorta el tiempo hasta el primer app.listen(). require() ya
+// cachea el módulo tras la primera llamada, así que esto no repite trabajo.
+function getGoogle() {
+  return require('googleapis').google;
+}
+function getPizZip() {
+  return require('pizzip');
+}
 
 // Los tokens se guardan cifrados (ver routes/backup.js, /callback). Si el valor
 // almacenado no descifra como JSON válido, se asume que es un registro previo a la
@@ -26,7 +36,8 @@ const SCOPES = ['https://www.googleapis.com/auth/drive.file', 'https://www.googl
 const FOLDER_NAME = 'Gestor JAL Backups';
 
 function getClient() {
-  return new google.auth.OAuth2(
+  const { OAuth2 } = getGoogle().auth;
+  return new OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/v1/backup/drive/callback'
@@ -34,7 +45,8 @@ function getClient() {
 }
 
 function getAuthUrl(redirectUri, state) {
-  const client = new google.auth.OAuth2(
+  const { OAuth2 } = getGoogle().auth;
+  const client = new OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     redirectUri
@@ -43,7 +55,8 @@ function getAuthUrl(redirectUri, state) {
 }
 
 async function exchangeCode(code, redirectUri) {
-  const client = new google.auth.OAuth2(
+  const { OAuth2 } = getGoogle().auth;
+  const client = new OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
     redirectUri
@@ -67,7 +80,7 @@ async function getAuthedClient(tokens) {
 async function getUserEmail(tokens) {
   try {
     const client = await getAuthedClient(tokens);
-    const oauth2 = google.oauth2({ version: 'v2', auth: client });
+    const oauth2 = getGoogle().oauth2({ version: 'v2', auth: client });
     const { data } = await oauth2.userinfo.get();
     return data.email;
   } catch { return null; }
@@ -130,7 +143,7 @@ async function uploadGeneratedDocument(jalId, doc, docxBuffer, pdfBuffer) {
 
   try {
     const client = await getAuthedClient(tokens);
-    const drive  = google.drive({ version: 'v3', auth: client });
+    const drive  = getGoogle().drive({ version: 'v3', auth: client });
 
     const rootFolderId = cfg.folder_id || await getOrCreateFolder(drive);
     const docsFolderId = cfg.docs_folder_id || await getOrCreateSubfolder(drive, rootFolderId, DOCS_FOLDER_NAME);
@@ -201,7 +214,7 @@ async function deleteDriveFiles(jalId, driveFileIds = []) {
 
   try {
     const client = await getAuthedClient(tokens);
-    const drive  = google.drive({ version: 'v3', auth: client });
+    const drive  = getGoogle().drive({ version: 'v3', auth: client });
     await Promise.all(ids.map((id) => drive.files.delete({ fileId: id }).catch(() => {})));
   } catch (err) {
     logger.error('deleteDriveFiles: fallo borrando archivos de Drive', { jalId, error: err.message });
@@ -214,6 +227,7 @@ async function buildBackupBuffer(jalId) {
     DocType.findAll({ where: { jal_id: jalId } }),
   ]);
 
+  const PizZip = getPizZip();
   const zip = new PizZip();
   const storagePath = process.env.STORAGE_PATH || path.join(__dirname, '../../data/output');
   const templatesPath = process.env.TEMPLATES_PATH || path.join(__dirname, '../../plantillas');
@@ -302,7 +316,7 @@ async function runBackup(jalId, userId, type = 'manual') {
     if (!tokens) throw new Error('Google Drive no está conectado');
 
     const client = await getAuthedClient(tokens);
-    const drive  = google.drive({ version: 'v3', auth: client });
+    const drive  = getGoogle().drive({ version: 'v3', auth: client });
 
     const folderId = cfg.folder_id || await getOrCreateFolder(drive);
 

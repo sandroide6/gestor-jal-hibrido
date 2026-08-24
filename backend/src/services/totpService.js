@@ -1,11 +1,19 @@
 'use strict';
-const speakeasy = require('speakeasy');
-const QRCode    = require('qrcode');
+// speakeasy/qrcode se importan siempre al arrancar (vía las rutas de 2FA), aunque la
+// mayoría de logins no activan/verifican 2FA en cada arranque. Diferirlos hasta el
+// primer uso real recorta el tiempo hasta el primer app.listen(); require() ya cachea
+// el módulo tras la primera llamada.
+function getSpeakeasy() {
+  return require('speakeasy');
+}
+function getQRCode() {
+  return require('qrcode');
+}
 
 const APP_NAME = 'Gestor JAL';
 
 function generateSecret(userEmail) {
-  return speakeasy.generateSecret({
+  return getSpeakeasy().generateSecret({
     name:   `${APP_NAME} (${userEmail})`,
     issuer: APP_NAME,
     length: 20,
@@ -13,11 +21,11 @@ function generateSecret(userEmail) {
 }
 
 async function generateQRDataURL(otpauthUrl) {
-  return QRCode.toDataURL(otpauthUrl);
+  return getQRCode().toDataURL(otpauthUrl);
 }
 
 function verifyToken(secret, token) {
-  return speakeasy.totp.verify({
+  return getSpeakeasy().totp.verify({
     secret,
     encoding: 'base32',
     token,

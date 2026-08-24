@@ -2,7 +2,13 @@
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const { DocType, Document, Jal, User } = require('../models');
-const documentGeneratorService = require('./documentGeneratorService');
+// documentGeneratorService carga en cascada docx/pdf-lib/docxtemplater/mammoth/pizzip —
+// pesados de requerir y este servicio se importa siempre al arrancar (vía las rutas de
+// documentos). Diferirlo hasta el primer documento generado recorta el tiempo hasta el
+// primer app.listen(); require() ya cachea el módulo tras la primera llamada.
+function getDocumentGeneratorService() {
+  return require('./documentGeneratorService');
+}
 const radicadoService = require('./radicadoService');
 const documentNumberService = require('./documentNumberService');
 const audit = require('./auditService');
@@ -141,7 +147,7 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
     templateData.numero_radicado = numeroRadicado;
 
     let docxPath, pdfPath;
-    ({ docxPath, pdfPath, docxBuffer, pdfBuffer } = await documentGeneratorService.generateDocuments({
+    ({ docxPath, pdfPath, docxBuffer, pdfBuffer } = await getDocumentGeneratorService().generateDocuments({
       jalId,
       jalName: jal.name,
       docType: {
