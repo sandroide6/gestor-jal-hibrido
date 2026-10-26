@@ -2,6 +2,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const { DocType, Document, Jal, User } = require('../models');
+const E = require('../config/errorCodes');
 // documentGeneratorService carga en cascada docx/pdf-lib/docxtemplater/mammoth/pizzip —
 // pesados de requerir y este servicio se importa siempre al arrancar (vía las rutas de
 // documentos). Diferirlo hasta el primer documento generado recorta el tiempo hasta el
@@ -98,7 +99,7 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
     const quien = edilId ? 'El edil seleccionado' : 'El firmante';
     throw Object.assign(
       new Error(`${quien} no tiene firma registrada. Registra una firma en el perfil antes de generar documentos.`),
-      { status: 400 }
+      { status: 400, code: E.SIGNATURE_MISSING }
     );
   }
 

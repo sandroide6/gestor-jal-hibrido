@@ -46,6 +46,7 @@ export default function GeneratorPage() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
   const [reviewing, setReviewing] = useState(false);
+  const [signatureMissing, setSignatureMissing] = useState(false);
   const [searchParams] = useSearchParams();
   const tipoParam = searchParams.get('tipo');
 
@@ -63,6 +64,7 @@ export default function GeneratorPage() {
     setSubmitAttempted(false);
     setDynErrors({});
     setReviewing(false);
+    setSignatureMissing(false);
     setStep(STEPS.FORM);
   }
 
@@ -107,6 +109,7 @@ export default function GeneratorPage() {
 
   async function handleGenerate() {
     setError('');
+    setSignatureMissing(false);
     setGenerating(true);
 
     const { beneficiaryName, beneficiaryId } = getBeneficiaryFromForm();
@@ -126,6 +129,7 @@ export default function GeneratorPage() {
       setStep(STEPS.RESULT);
     } catch (err) {
       setError(`No se pudo crear el documento${err.message ? ` (${err.message})` : ''}. Tus datos siguen aquí: puedes corregirlos o intentarlo de nuevo.`);
+      setSignatureMissing((err.code || err.data?.code) === 'SIGNATURE_MISSING');
     } finally {
       setGenerating(false);
     }
@@ -305,6 +309,15 @@ export default function GeneratorPage() {
               {error && (
                 <div role="alert" className="text-red-800 bg-red-50 border border-red-300 rounded-lg px-4 py-3">
                   {error}
+                  {signatureMissing && (
+                    selectedEdilId ? (
+                      <p className="mt-1">Pídele al edil que inicie sesión y suba su firma desde <strong>Mi perfil</strong>.</p>
+                    ) : (
+                      <p className="mt-1">
+                        <Link to="/perfil" className="font-semibold underline">Ir a Mi perfil para subir tu firma →</Link>
+                      </p>
+                    )
+                  )}
                 </div>
               )}
 
