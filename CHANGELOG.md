@@ -28,6 +28,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 ### Corregido
 - **El Certificado de Residencia salía con «La ciudadana undefined, identificada con undefined»**: la plantilla usa `{Nombre}` y `{tipodeidentificacion}` y el tipo sembrado no los pedía. Ahora las etiquetas se emparejan sin distinguir mayúsculas ni tildes, y si una plantilla pide un dato que ningún campo llena, el documento no se emite (422) y el mensaje dice qué campo agregar
 - Icono roto de «Generar documento» en el menú
+- El aviso al administrador de «variables en la plantilla sin campo definido» nunca salía: buscaba `{{variable}}` y las plantillas usan `{variable}`. Ahora detecta las reales y empareja igual que al generar (sin distinguir mayúsculas ni tildes)
 - La retención de backups en Drive podía borrar permanentemente la carpeta "Documentos generados" (ahora solo cuenta los zips de backup)
 - `PUT /v1/backup/drive/config` valida sus campos; un `retention_count` negativo borraba todos los backups
 - `POST /v1/backup/drive/open-folder` responde 501 fuera de Windows en vez de tumbar el proceso
