@@ -5,7 +5,6 @@ import {
   cacheTemplate, getCachedTemplate, cacheUserData, getCachedUserData,
 } from '../db/index';
 import { useSyncStore } from '../stores/syncStore';
-import { generateDocxBlob, generatePdfBlob, generateDocxBlobFromTemplate } from './clientDocumentGenerator';
 
 // true cuando el error es de red (sin respuesta HTTP del servidor)
 function isNetworkError(err) {
@@ -177,6 +176,9 @@ export async function generateDocument({ docType, formData, beneficiaryName, ben
 
   let offlineBlobs = null;
   let offlineBlobError = null;
+  // Import diferido: el generador arrastra docx/pdf-lib/docxtemplater (~370 KB gzip) y
+  // solo hace falta sin conexión; el service worker ya lo tiene precacheado.
+  const { generateDocxBlob, generatePdfBlob, generateDocxBlobFromTemplate } = await import('./clientDocumentGenerator');
 
   try {
     const [docxBlob, pdfBlob] = await Promise.all([
