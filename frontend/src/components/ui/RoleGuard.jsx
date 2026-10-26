@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 
 export default function RoleGuard({ children, requireAuth = false, roles = [] }) {
@@ -17,6 +17,7 @@ export default function RoleGuard({ children, requireAuth = false, roles = [] })
           <p className="text-sm text-gray-600">
             No tienes permisos para acceder a esta sección.
           </p>
+          <Link to="/inicio" className="btn-primary mt-4">Volver al inicio</Link>
         </div>
       </div>
     );

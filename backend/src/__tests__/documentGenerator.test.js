@@ -166,4 +166,25 @@ describe('generateDocuments — PT-01: Generación de documentos', () => {
     // bajo la suite completa (30+ archivos en paralelo) puede tardar más que el timeout
     // por defecto de 20s solo por contención, sin que sea un fallo real.
   }, 45000);
+
+  // ── Etiquetas de plantilla vs. campos del formulario ──────────────────────
+  async function plantilla(nombre, texto) {
+    const { Document: DocxDocument, Packer, Paragraph } = require('docx');
+    const buf = await Packer.toBuffer(new DocxDocument({ sections: [{ children: [new Paragraph(texto)] }] }));
+    fs.writeFileSync(path.join(tmpTemplates, nombre), buf);
+    return { ...DOC_TYPE, template_path: nombre };
+  }
+
+  it('empareja {Nombre} y {dirección} con los campos nombre y direccion', async () => {
+    const docType = await plantilla('tpl_tildes.docx', 'La ciudadana {Nombre} vive en {dirección}.');
+    const r = await generateDocuments({ jalId: JAL_ID, jalName: 'JAL', docType, data: { ...DATA, nombre: 'Ana Pérez', direccion: 'Calle 1' } });
+    const { value: text } = await mammoth.extractRawText({ path: r.docxPath });
+    expect(text).toContain('La ciudadana Ana Pérez vive en Calle 1.');
+  }, 45000);
+
+  it('se niega a generar si la plantilla pide un dato que nadie llena (nunca escribe "undefined")', async () => {
+    const docType = await plantilla('tpl_faltante.docx', 'Identificada con {tipodeidentificacion}.');
+    await expect(generateDocuments({ jalId: JAL_ID, jalName: 'JAL', docType, data: DATA }))
+      .rejects.toMatchObject({ status: 422, message: expect.stringContaining('tipodeidentificacion') });
+  });
 });

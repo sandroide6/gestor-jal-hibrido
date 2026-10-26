@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useSyncStore } from '../stores/syncStore';
-import { generateDocument, getDownloadUrls, downloadDocument, cacheEdilSignature } from '../services/documentService';
+import { generateDocument, downloadDocument, cacheEdilSignature } from '../services/documentService';
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useEdiles } from '../hooks/useEdiles';
 import DynamicForm from '../components/forms/DynamicForm';
@@ -10,6 +10,20 @@ import AppLayout from '../components/ui/AppLayout';
 import EmptyState from '../components/ui/EmptyState';
 
 const STEPS = { SELECT: 'select', FORM: 'form', RESULT: 'result' };
+
+// La fecha de expedición casi siempre es hoy; otras fechas (p. ej. de una citación) se dejan vacías.
+const isIssueDate = (f) => f.type === 'date' && /expedici|^fecha$/i.test(f.label ?? '');
+const todayISO = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en hora local
+
+function initialValues(type) {
+  return Object.fromEntries((type.fields ?? []).filter(isIssueDate).map((f) => [f.name, todayISO()]));
+}
+
+function displayValue(field, value) {
+  if (!value) return '—';
+  if (field.type === 'date') return new Date(`${value}T00:00:00`).toLocaleDateString('es-CO', { dateStyle: 'long' });
+  return value;
+}
 
 export default function GeneratorPage() {
   const { token, user } = useAuthStore();
@@ -31,7 +45,10 @@ export default function GeneratorPage() {
   const [downloading, setDownloading] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [reviewing, setReviewing] = useState(false);
   const [signatureMissing, setSignatureMissing] = useState(false);
+  const [searchParams] = useSearchParams();
+  const tipoParam = searchParams.get('tipo');
 
   // Validación
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -42,17 +59,22 @@ export default function GeneratorPage() {
 
   function handleSelectType(type) {
     setSelectedType(type);
-  }
-
-  function handleContinue() {
-    if (!selectedType) return;
-    setFormValues({});
+    setFormValues(initialValues(type));
     setError('');
     setSubmitAttempted(false);
     setDynErrors({});
+    setReviewing(false);
     setSignatureMissing(false);
     setStep(STEPS.FORM);
   }
+
+  // Desde Inicio llega ?tipo=<id>: abrir el formulario directamente
+  useEffect(() => {
+    if (!tipoParam || step !== STEPS.SELECT || selectedType) return;
+    const type = docTypes.find((t) => t.id === tipoParam);
+    if (type) handleSelectType(type);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipoParam, allTypes]);
 
   function handleFieldChange(name, value) {
     setFormValues((prev) => ({ ...prev, [name]: value }));
@@ -72,10 +94,20 @@ export default function GeneratorPage() {
     };
   }
 
-  async function handleSubmit(e) {
+  function handleSubmit(e) {
     e.preventDefault();
     setSubmitAttempted(true);
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      // Llevar al primer campo con error, que puede estar fuera de la pantalla
+      setTimeout(() => document.querySelector('[aria-invalid="true"]')?.focus());
+      return;
+    }
+    setError('');
+    setReviewing(true);
+    window.scrollTo(0, 0);
+  }
+
+  async function handleGenerate() {
     setError('');
     setSignatureMissing(false);
     setGenerating(true);
@@ -96,14 +128,22 @@ export default function GeneratorPage() {
       setResult({ ...res, beneficiaryName });
       setStep(STEPS.RESULT);
     } catch (err) {
-      setError(err.message || 'Error al generar el documento');
+      setError(`No se pudo crear el documento${err.message ? ` (${err.message})` : ''}. Tus datos siguen aquí: puedes corregirlos o intentarlo de nuevo.`);
       setSignatureMissing((err.code || err.data?.code) === 'SIGNATURE_MISSING');
     } finally {
       setGenerating(false);
     }
   }
 
+  function handleCancel() {
+    const initial = initialValues(selectedType);
+    const hasData = Object.entries(formValues).some(([k, v]) => v && v !== initial[k]);
+    if (hasData && !window.confirm('¿Salir sin crear el documento? Se perderán los datos que escribiste.')) return;
+    handleReset();
+  }
+
   function handleReset() {
+    setReviewing(false);
     setStep(STEPS.SELECT);
     setSelectedType(null);
     setSelectedEdilId('');
@@ -122,249 +162,219 @@ export default function GeneratorPage() {
     cacheEdilSignature(selectedEdilId, token);
   }, [selectedEdilId, token]);
 
+  const stepLabels = [
+    [STEPS.SELECT, '1. Elegir documento'],
+    [STEPS.FORM, reviewing ? '2. Revisar datos' : '2. Escribir datos'],
+    [STEPS.RESULT, '3. Listo'],
+  ];
+
   return (
-    <AppLayout title="Generador de Documentos">
-      {/* Breadcrumb de pasos */}
-      <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-5 flex-wrap">
-        <span className={step === STEPS.SELECT ? 'text-jal-blue-500 font-semibold' : ''}>1. Selección</span>
-        <span>›</span>
-        <span className={step === STEPS.FORM ? 'text-jal-blue-500 font-semibold' : ''}>2. Datos</span>
-        <span>›</span>
-        <span className={step === STEPS.RESULT ? 'text-jal-blue-500 font-semibold' : ''}>3. Descarga</span>
-      </div>
+    <AppLayout title="Crear documento">
+      <div className="max-w-3xl">
+      {/* Pasos */}
+      <ol className="flex items-center gap-2 text-sm text-gray-500 mb-6 flex-wrap" aria-label="Pasos">
+        {stepLabels.map(([key, label], i) => (
+          <li key={key} className="flex items-center gap-2">
+            {i > 0 && <span aria-hidden="true">›</span>}
+            <span className={step === key ? 'text-jal-blue-600 font-semibold' : ''} aria-current={step === key ? 'step' : undefined}>
+              {label}
+            </span>
+          </li>
+        ))}
+      </ol>
 
-      {/* PASO 1 — Selección de tipo y edil */}
+      {/* PASO 1 — Elegir tipo */}
       {step === STEPS.SELECT && (
-        <div className="space-y-8">
-
-          {/* Sección: tipo de documento */}
-          <div>
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Selecciona el tipo de documento
-            </h2>
-            {loadingTypes ? (
-              <p className="text-sm text-gray-400">Cargando tipos de documento…</p>
-            ) : docTypes.length === 0 ? (
-              <EmptyState message="No hay tipos de documento configurados para esta JAL." />
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {docTypes.map((type) => {
-                  const isSelected = selectedType?.id === type.id;
-                  return (
-                    <button
-                      key={type.id}
-                      onClick={() => handleSelectType(type)}
-                      className={`card text-left transition-all cursor-pointer group
-                        ${isSelected
-                          ? 'border-jal-blue-500 ring-2 ring-jal-blue-200 shadow-md'
-                          : 'hover:border-jal-blue-300 hover:shadow-md'}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className={`font-semibold text-sm ${isSelected ? 'text-jal-blue-600' : 'text-jal-blue-500 group-hover:text-jal-blue-600'}`}>
-                          {type.name}
-                        </p>
-                        {isSelected && (
-                          <span className="flex-shrink-0 w-5 h-5 bg-jal-blue-500 rounded-full flex items-center justify-center">
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {(type.fields || []).length} campo(s)
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {(typeError || error) && (
-              <p className="text-sm text-red-600 mt-4">{typeError || error}</p>
-            )}
-          </div>
-
-          {/* Sección: edil (solo para auxiliar) */}
-          {isAuxiliar && ediles.length > 0 && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                Selecciona el edil
-              </h2>
-              <div className="card">
-                <label className="label" htmlFor="edil_select">
-                  Edil a nombre del cual se generará el documento
-                </label>
-                <select
-                  id="edil_select"
-                  className="input"
-                  value={selectedEdilId}
-                  onChange={(e) => setSelectedEdilId(e.target.value)}
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">¿Qué documento necesitas hacer?</h2>
+          {loadingTypes ? (
+            <p className="text-gray-500">Cargando…</p>
+          ) : docTypes.length === 0 ? (
+            <EmptyState message="Todavía no hay documentos configurados. Pide al administrador que los agregue." />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {docTypes.map((type) => (
+                <button
+                  key={type.id}
+                  type="button"
+                  onClick={() => handleSelectType(type)}
+                  className="card !p-5 text-left flex items-center justify-between gap-3 text-lg font-semibold text-jal-blue-600
+                             hover:border-jal-blue-400 hover:bg-jal-blue-50 focus:outline-none focus:ring-2 focus:ring-jal-blue-400"
                 >
-                  <option value="">— Sin edil asignado —</option>
-                  {ediles.map((edil) => (
-                    <option key={edil.id} value={edil.id}>
-                      {edil.name}{edil.cargo_titulo ? ` — ${edil.cargo_titulo}` : ''}
-                    </option>
-                  ))}
-                </select>
-                {selectedEdilId && (
-                  <p className="text-xs text-amber-700 mt-2">
-                    El documento se generará a nombre de <strong>{selectedEdil?.name}</strong> y se le notificará para que lo revise.
-                  </p>
-                )}
-              </div>
+                  <span>{type.name}</span>
+                  <span aria-hidden="true" className="text-2xl">›</span>
+                </button>
+              ))}
             </div>
           )}
-
-          {/* Botón continuar */}
-          {selectedType && (
-            <button onClick={handleContinue} className="btn-primary">
-              Continuar →
-            </button>
+          {(typeError || error) && (
+            <p role="alert" className="text-red-700 mt-4">
+              {typeError ? 'No se pudo cargar la lista de documentos. Recarga la página para intentarlo de nuevo.' : error}
+            </p>
           )}
         </div>
       )}
 
-      {/* PASO 2 — Formulario */}
+      {/* PASO 2 — Datos y revisión */}
       {step === STEPS.FORM && selectedType && (
         <div>
-          <div className="flex items-center gap-3 mb-6">
-            <button onClick={handleReset} className="text-sm text-jal-blue-400 hover:underline">
-              ← Cambiar selección
+          <div className="mb-6">
+            <button type="button" onClick={handleCancel} className="text-jal-blue-600 underline min-h-[44px]" disabled={generating}>
+              ← Elegir otro documento
             </button>
-            <h2 className="text-lg font-semibold text-gray-800">{selectedType.name}</h2>
-            {selectedEdil && (
-              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                {selectedEdil.name}
-              </span>
-            )}
+            <h2 className="text-2xl font-bold text-gray-900 mt-1">{selectedType.name}</h2>
           </div>
 
           {!isOnline && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700 mb-4">
-              Estás sin conexión. El documento se generará localmente y podrás descargarlo
-              inmediatamente. Se sincronizará con el servidor al reconectarte.
+            <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-amber-900 mb-4">
+              Estás sin conexión. El documento se creará en este equipo y podrás descargarlo de una vez.
+              Se enviará al sistema cuando vuelva internet.
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {(selectedType.fields?.length ?? 0) > 0 && (
-              <div className="card">
-                <h3 className="text-sm font-semibold text-gray-600 mb-4">
-                  Datos del documento
-                </h3>
-                <DynamicForm
-                  fields={selectedType.fields}
-                  values={formValues}
-                  onChange={handleFieldChange}
-                  disabled={generating}
-                  submitAttempted={submitAttempted}
-                  onErrorsChange={setDynErrors}
-                />
-              </div>
-            )}
-
-            {error && (
-              <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {error}
-                {signatureMissing && (
-                  selectedEdilId ? (
-                    <p className="mt-1">Pídele al edil que inicie sesión y suba su firma desde <strong>Mi perfil</strong>.</p>
-                  ) : (
-                    <p className="mt-1">
-                      <Link to="/perfil" className="font-semibold underline">Ir a Mi perfil para subir tu firma →</Link>
+          {!reviewing ? (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {isAuxiliar && ediles.length > 0 && (
+                <div className="card">
+                  <label className="label" htmlFor="edil_select">
+                    ¿A nombre de qué edil sale el documento?
+                  </label>
+                  <select
+                    id="edil_select"
+                    className="input"
+                    value={selectedEdilId}
+                    onChange={(e) => setSelectedEdilId(e.target.value)}
+                  >
+                    <option value="">Ninguno</option>
+                    {ediles.map((edil) => (
+                      <option key={edil.id} value={edil.id}>
+                        {edil.name}{edil.cargo_titulo ? ` — ${edil.cargo_titulo}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedEdil && (
+                    <p className="text-sm text-gray-700 mt-2">
+                      Saldrá a nombre de <strong>{selectedEdil.name}</strong>, que recibirá un aviso para revisarlo.
                     </p>
-                  )
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
 
-            <div className="flex gap-3">
-              <button type="submit" className="btn-primary" disabled={generating}>
-                {generating ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                    </svg>
-                    Generando…
-                  </span>
-                ) : (
-                  'Generar documento'
-                )}
-              </button>
-              <button type="button" className="btn-secondary" onClick={handleReset} disabled={generating}>
-                Cancelar
-              </button>
+              {(selectedType.fields?.length ?? 0) > 0 && (
+                <div className="card">
+                  <p className="text-gray-600 mb-4">Los campos con <span className="text-red-600 font-semibold">*</span> son obligatorios.</p>
+                  <DynamicForm
+                    fields={selectedType.fields}
+                    values={formValues}
+                    onChange={handleFieldChange}
+                    disabled={generating}
+                    submitAttempted={submitAttempted}
+                    onErrorsChange={setDynErrors}
+                  />
+                </div>
+              )}
+
+              {submitAttempted && hasDynErrors && (
+                <p role="alert" className="text-red-700">Falta completar o corregir algunos datos. Están marcados en rojo.</p>
+              )}
+
+              <div className="flex flex-wrap gap-3">
+                <button type="submit" className="btn-primary">Revisar antes de crear</button>
+                <button type="button" className="btn-secondary" onClick={handleCancel}>Cancelar</button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-6">
+              <div className="card">
+                <h3 className="text-xl font-bold text-gray-900">Revisa que todo esté bien</h3>
+                <p className="text-gray-600 mt-1 mb-4">Así saldrá en el documento. Al crearlo se le asigna un número de radicado.</p>
+                <dl className="divide-y divide-gray-200">
+                  {selectedEdil && (
+                    <div className="py-2 sm:grid sm:grid-cols-3 sm:gap-4">
+                      <dt className="text-gray-600">A nombre de</dt>
+                      <dd className="font-semibold text-gray-900 sm:col-span-2">{selectedEdil.name}</dd>
+                    </div>
+                  )}
+                  {(selectedType.fields ?? []).map((f) => (
+                    <div key={f.name} className="py-2 sm:grid sm:grid-cols-3 sm:gap-4">
+                      <dt className="text-gray-600">{f.label}</dt>
+                      <dd className="font-semibold text-gray-900 sm:col-span-2 break-words whitespace-pre-line">
+                        {displayValue(f, formValues[f.name])}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+
+              {error && (
+                <div role="alert" className="text-red-800 bg-red-50 border border-red-300 rounded-lg px-4 py-3">
+                  {error}
+                  {signatureMissing && (
+                    selectedEdilId ? (
+                      <p className="mt-1">Pídele al edil que inicie sesión y suba su firma desde <strong>Mi perfil</strong>.</p>
+                    ) : (
+                      <p className="mt-1">
+                        <Link to="/perfil" className="font-semibold underline">Ir a Mi perfil para subir tu firma →</Link>
+                      </p>
+                    )
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-3">
+                <button type="button" className="btn-primary" onClick={handleGenerate} disabled={generating}>
+                  {generating ? 'Creando el documento…' : 'Sí, crear el documento'}
+                </button>
+                <button type="button" className="btn-secondary" onClick={() => { setReviewing(false); setError(''); }} disabled={generating}>
+                  Corregir datos
+                </button>
+              </div>
             </div>
-          </form>
+          )}
         </div>
       )}
 
       {/* PASO 3 — Resultado */}
       {step === STEPS.RESULT && result && (
-        <div>
-          <div className="card border-green-200 bg-green-50 mb-6">
-            <div className="flex items-start gap-3">
-              <div className="text-green-500 mt-0.5">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="font-semibold text-green-800 text-sm">
-                  {result.offline
-                    ? 'Documento guardado localmente'
-                    : 'Documento generado exitosamente'}
-                </p>
-                <p className="text-sm text-green-700 mt-0.5">
-                  <strong>{result.beneficiaryName}</strong> — {selectedType?.name}
-                </p>
-                {selectedEdil && (
-                  <p className="text-xs text-green-600 mt-0.5">
-                    A nombre de: <strong>{selectedEdil.name}</strong>
-                  </p>
-                )}
-                {result.numero_radicado && (
-                  <p className="text-xs text-green-600 mt-1 font-mono">
-                    Radicado <strong>{result.numero_radicado}</strong>
-                  </p>
-                )}
-                {result.document_number && (
-                  <p className="text-xs text-green-600 mt-1 font-mono">
-                    N.° <strong>{result.document_number}</strong>
-                  </p>
-                )}
-                {result.offline && (
-                  <p className="text-xs text-amber-700 mt-1">
-                    Se sincronizará automáticamente cuando se recupere la conexión.
-                  </p>
-                )}
-              </div>
-            </div>
+        <div className="space-y-6">
+          <div className="card border-green-300 bg-green-50" role="status">
+            <p className="text-xl font-bold text-green-900">
+              {result.offline ? '✓ Documento creado en este equipo' : '✓ Documento creado y guardado'}
+            </p>
+            <p className="text-green-900 mt-1">
+              <strong>{selectedType?.name}</strong>{result.beneficiaryName ? ` — ${result.beneficiaryName}` : ''}
+            </p>
+            {selectedEdil && <p className="text-green-900">A nombre de <strong>{selectedEdil.name}</strong></p>}
+            {result.numero_radicado && <p className="text-green-900 mt-1">Radicado <strong className="font-mono">{result.numero_radicado}</strong></p>}
+            {result.document_number && <p className="text-green-900">N.° <strong className="font-mono">{result.document_number}</strong></p>}
+            <p className="text-green-900 mt-3">
+              {result.offline
+                ? 'Se enviará al sistema cuando vuelva internet. Mientras tanto, descárgalo aquí.'
+                : <>Quedó guardado en el sistema. Lo encuentras cuando quieras en <Link to="/inicio" className="underline font-semibold">Inicio › Mis documentos recientes</Link>.</>}
+            </p>
           </div>
 
-          {/* Botones de descarga */}
           {result?.id && (
-            <div className="card mb-6">
-              <h3 className="text-sm font-semibold text-gray-600 mb-3">Descargar documento</h3>
+            <div className="card">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">Descargar</h3>
               {result.offline && result.offlineBlobError && (
-                <p className="text-xs text-amber-600 mb-2">
-                  No se pudo generar el archivo localmente ({result.offlineBlobError}). Estará disponible al sincronizarse.
+                <p className="text-amber-800 mb-3">
+                  No se pudo preparar el archivo en este equipo ({result.offlineBlobError}). Podrás descargarlo cuando vuelva internet.
                 </p>
               )}
               <div className="flex flex-wrap gap-3">
-                {['docx', 'pdf'].map((fmt) => {
+                {['pdf', 'docx'].map((fmt) => {
                   const hasOfflineBlob = result.offline && result.offlineBlobs?.[fmt];
                   const hasOnline = !result.offline;
                   if (!hasOfflineBlob && !hasOnline) return null;
                   return (
                     <button
                       key={fmt}
+                      type="button"
                       disabled={!!downloading}
                       onClick={async () => {
                         setDownloading(fmt);
+                        setError('');
                         try {
                           const name = `${selectedType?.name}_${result.beneficiaryName}.${fmt}`;
                           if (hasOfflineBlob) {
@@ -373,28 +383,30 @@ export default function GeneratorPage() {
                           } else {
                             await downloadDocument(result.id, fmt, token, name);
                           }
-                        } catch (e) {
-                          setError(e.message);
+                        } catch {
+                          setError('No se pudo descargar. El documento sigue guardado; inténtalo de nuevo.');
                         } finally {
                           setDownloading('');
                         }
                       }}
-                      className={fmt === 'docx' ? 'btn-primary' : 'btn-secondary'}
+                      className={fmt === 'pdf' ? 'btn-primary' : 'btn-secondary'}
                     >
-                      {downloading === fmt ? 'Descargando…' : `Descargar .${fmt}`}
+                      {downloading === fmt ? 'Descargando…' : fmt === 'pdf' ? 'Descargar PDF (para imprimir)' : 'Descargar Word (para editar)'}
                     </button>
                   );
                 })}
               </div>
-              {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+              {error && <p role="alert" className="text-red-700 mt-3">{error}</p>}
             </div>
           )}
 
-          <button onClick={handleReset} className="btn-secondary">
-            Generar otro documento
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button type="button" onClick={handleReset} className="btn-secondary">Crear otro documento</button>
+            <Link to="/inicio" className="btn-secondary">Volver al inicio</Link>
+          </div>
         </div>
       )}
+      </div>
     </AppLayout>
   );
 }

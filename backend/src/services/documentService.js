@@ -116,6 +116,8 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
   const templateData = {
     beneficiary_name: beneficiaryName,
     beneficiary_id: beneficiaryId,
+    // Campos opcionales que el usuario dejó sin tocar salen vacíos, no como dato faltante
+    ...Object.fromEntries((docType.fields || []).map((f) => [f.name, ''])),
     ...formFields,
     jal_name: jal.name,
     doc_type_name: docType.name,

@@ -206,13 +206,33 @@ async function generateDocxFromTemplate({ templatePath, templateData, data, sign
   }
 
   // Los templates usan delimitadores simples {variable} — configurar docxtemplater igual
+  // Las plantillas Word traen etiquetas como {Nombre} o {dirección}, pero los campos solo
+  // admiten minúsculas sin tildes: se emparejan ignorando mayúsculas y tildes.
+  const norm = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const byNorm = Object.fromEntries(Object.entries(renderData).map(([k, v]) => [norm(k), v]));
+  const missing = new Set();
   const tpl = new Docxtemplater(zip, {
     modules,
     paragraphLoop: true,
     linebreaks: true,
     delimiters: { start: '{', end: '}' },
+    // Sin esto docxtemplater escribe "undefined" en el documento oficial
+    nullGetter(part) {
+      if (part.module) return '';
+      const v = byNorm[norm(part.value)];
+      if (v !== undefined && v !== null) return v;
+      missing.add(part.value);
+      return '';
+    },
   });
   tpl.render(renderData);
+  if (missing.size > 0) {
+    throw Object.assign(
+      new Error(`La plantilla usa datos que este tipo de documento no pide: ${[...missing].join(', ')}. ` +
+        'Un administrador debe agregarlos como campos en «Tipos de documento».'),
+      { status: 422 }
+    );
+  }
   return tpl.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });
 }
 

@@ -14,7 +14,7 @@ import { ROLE_LABEL } from '../../constants';
 // ── Iconos SVG ────────────────────────────────────────────
 function Icon({ d, d2 }) {
   return (
-    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" d={d} />
       {d2 && <path strokeLinecap="round" strokeLinejoin="round" d={d2} />}
     </svg>
@@ -22,7 +22,8 @@ function Icon({ d, d2 }) {
 }
 
 const ICONS = {
-  generar:    'd="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"',
+  generar:    'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+  resumen:    'M4 6h16M4 12h16M4 18h7',
   documentos: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
   panel:      'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
   usuarios:   'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
@@ -38,20 +39,21 @@ const NAV_GROUPS = [
   {
     label: 'Principal',
     items: [
-      { path: '/generador', label: 'Generar documento', icon: ICONS.generar,    roles: ['auxiliar', 'administrador', 'edil'] },
-      { path: '/edil',      label: 'Documentos',        icon: ICONS.documentos, roles: ['edil', 'administrador'] },
+      { path: '/inicio',    label: 'Inicio',            icon: ICONS.panel,      roles: ['auxiliar', 'administrador', 'edil'] },
+      { path: '/generador', label: 'Crear documento',   icon: ICONS.generar,    roles: ['auxiliar', 'administrador', 'edil'] },
+      { path: '/edil',      label: 'Buscar documentos', icon: ICONS.documentos, roles: ['edil', 'administrador'] },
       { path: '/reportes',  label: 'Reportes',          icon: ICONS.reportes,   roles: ['edil', 'administrador'] },
     ],
   },
   {
     label: 'Administración',
     items: [
-      { path: '/admin',                 label: 'Panel',            icon: ICONS.panel,    roles: ['administrador', 'edil'] },
+      { path: '/admin',                 label: 'Resumen',          icon: ICONS.resumen,    roles: ['administrador', 'edil'] },
       { path: '/admin/usuarios',        label: 'Usuarios',         icon: ICONS.usuarios, roles: ['administrador'] },
       { path: '/admin/tipos-documento', label: 'Tipos de documento', icon: ICONS.tipos,  roles: ['administrador'] },
       { path: '/admin/auditoria',       label: 'Auditoría',        icon: ICONS.auditoria,roles: ['administrador', 'edil'] },
       { path: '/admin/jal-config',      label: 'Configuración JAL', icon: ICONS.config,  roles: ['administrador'] },
-      { path: '/admin/configuracion/backup', label: 'Backup Drive',  icon: ICONS.backup,  roles: ['administrador'] },
+      { path: '/admin/configuracion/backup', label: 'Copias de seguridad', icon: ICONS.backup,  roles: ['administrador'] },
     ],
   },
 ];
@@ -66,7 +68,7 @@ function NavItem({ item, active, onClick, collapsed }) {
       to={item.path}
       onClick={onClick}
       title={collapsed ? item.label : undefined}
-      className={`flex items-center py-2 rounded-lg text-sm transition-all ${
+      className={`flex items-center py-2.5 min-h-[44px] rounded-lg text-base transition-all ${
         collapsed ? 'justify-center px-2' : 'gap-3 px-3'
       } ${
         active
@@ -224,7 +226,7 @@ export default function AppLayout({ children, title }) {
       {/* ══════════════════════════════════════════════════════
           SIDEBAR DESKTOP (md+)
       ══════════════════════════════════════════════════════ */}
-      <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-jal-blue-600 flex-col z-30 shadow-xl transition-all duration-300 ${sidebarOpen ? 'w-56' : 'w-14'}`}>
+      <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-jal-blue-600 flex-col z-30 shadow-xl transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-14'}`}>
 
         {/* Logo */}
         <div className={`py-5 flex items-center border-b border-white/10 ${sidebarOpen ? 'px-4 gap-3' : 'px-2 justify-center'}`}>
@@ -275,7 +277,7 @@ export default function AppLayout({ children, title }) {
               ) : (
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOnline ? 'bg-green-400' : 'bg-amber-400'}`} />
               )}
-              <span className="text-jal-blue-200 text-xs">
+              <span className="text-jal-blue-100 text-sm">
                 {isSyncing ? 'Sincronizando…' : isOnline ? 'En línea' : 'Sin conexión'}
               </span>
               {pendingCount > 0 && !isSyncing && (
@@ -307,7 +309,7 @@ export default function AppLayout({ children, title }) {
               {sidebarOpen && (
                 <>
                   <div className="min-w-0 flex-1">
-                    <p className="text-white text-xs font-medium leading-tight truncate">{user?.name}</p>
+                    <p className="text-white text-sm font-medium leading-tight truncate">{user?.name}</p>
                     <p className="text-jal-blue-300 text-xs leading-tight">{ROLE_LABEL[user?.role] || user?.role}</p>
                   </div>
                   <svg className="w-3.5 h-3.5 text-jal-blue-300 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -320,7 +322,7 @@ export default function AppLayout({ children, title }) {
             {showUserMenu && (
               <div className={`absolute bottom-full mb-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 ${sidebarOpen ? 'left-0 right-0' : 'left-0 w-44'}`}>
                 <button
-                  className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   onClick={() => { navigate('/perfil'); setShowUserMenu(false); }}
                 >
                   <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -329,7 +331,7 @@ export default function AppLayout({ children, title }) {
                   Mi perfil y firma
                 </button>
                 <button
-                  className="w-full text-left px-4 py-2.5 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                   onClick={() => { setShowChangePassword(true); setShowUserMenu(false); }}
                 >
                   <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -339,7 +341,7 @@ export default function AppLayout({ children, title }) {
                 </button>
                 <hr className="my-1 border-gray-100" />
                 <button
-                  className="w-full text-left px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+                  className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
                   onClick={() => { logout(); setShowUserMenu(false); }}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
@@ -356,7 +358,7 @@ export default function AppLayout({ children, title }) {
       {/* ══════════════════════════════════════════════════════
           ÁREA DE CONTENIDO (con margen para el sidebar en md+)
       ══════════════════════════════════════════════════════ */}
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarOpen ? 'md:ml-56' : 'md:ml-14'}`}>
+      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'md:ml-14'}`}>
 
         {/* Top bar */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-20">

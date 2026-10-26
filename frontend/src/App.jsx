@@ -27,6 +27,7 @@ function useServerHealthPolling() {
 
 const LoginPage      = lazy(() => import('./pages/LoginPage'));
 const HabeasDataPage = lazy(() => import('./pages/HabeasDataPage'));
+const HomePage       = lazy(() => import('./pages/HomePage'));
 const DashboardPage  = lazy(() => import('./pages/DashboardPage'));
 const GeneratorPage = lazy(() => import('./pages/GeneratorPage'));
 const EdilPage      = lazy(() => import('./pages/EdilPage'));
@@ -69,7 +70,7 @@ export default function App() {
         <Routes>
         <Route
           path="/login"
-          element={isAuthenticated ? <Navigate to="/generador" replace /> : <LoginPage />}
+          element={isAuthenticated ? <Navigate to="/inicio" replace /> : <LoginPage />}
         />
 
         <Route
@@ -83,7 +84,16 @@ export default function App() {
 
         <Route
           path="/"
-          element={<Navigate to={isAuthenticated ? '/generador' : '/login'} replace />}
+          element={<Navigate to={isAuthenticated ? '/inicio' : '/login'} replace />}
+        />
+
+        <Route
+          path="/inicio"
+          element={
+            <RoleGuard requireAuth roles={['auxiliar', 'administrador', 'edil']}>
+              <HomePage />
+            </RoleGuard>
+          }
         />
 
         <Route
@@ -176,7 +186,7 @@ export default function App() {
           }
         />
 
-        <Route path="*" element={<Navigate to={isAuthenticated ? '/generador' : '/login'} replace />} />
+        <Route path="*" element={<Navigate to={isAuthenticated ? '/inicio' : '/login'} replace />} />
         </Routes>
       </Suspense>
     </>
