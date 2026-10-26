@@ -147,7 +147,10 @@ export async function generateDocument({ docType, formData, beneficiaryName, ben
 
   if (!cachedSig) {
     const quien = edilId ? 'El edil seleccionado' : 'El firmante';
-    throw new Error(`${quien} no tiene firma registrada. Registra una firma en el perfil antes de generar documentos.`);
+    throw Object.assign(
+      new Error(`${quien} no tiene firma registrada. Registra una firma en el perfil antes de generar documentos.`),
+      { code: 'SIGNATURE_MISSING' }
+    );
   }
 
   const jalName = import.meta.env.VITE_JAL_NOMBRE || 'JAL';

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useSyncStore } from '../stores/syncStore';
 import { generateDocument, getDownloadUrls, downloadDocument, cacheEdilSignature } from '../services/documentService';
@@ -31,6 +32,7 @@ export default function GeneratorPage() {
   const [downloading, setDownloading] = useState('');
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [signatureMissing, setSignatureMissing] = useState(false);
 
   // Validación
   const [submitAttempted, setSubmitAttempted] = useState(false);
@@ -49,6 +51,7 @@ export default function GeneratorPage() {
     setError('');
     setSubmitAttempted(false);
     setDynErrors({});
+    setSignatureMissing(false);
     setStep(STEPS.FORM);
   }
 
@@ -75,6 +78,7 @@ export default function GeneratorPage() {
     setSubmitAttempted(true);
     if (!canSubmit) return;
     setError('');
+    setSignatureMissing(false);
     setGenerating(true);
 
     const { beneficiaryName, beneficiaryId } = getBeneficiaryFromForm();
@@ -94,6 +98,7 @@ export default function GeneratorPage() {
       setStep(STEPS.RESULT);
     } catch (err) {
       setError(err.message || 'Error al generar el documento');
+      setSignatureMissing((err.code || err.data?.code) === 'SIGNATURE_MISSING');
     } finally {
       setGenerating(false);
     }
@@ -263,6 +268,15 @@ export default function GeneratorPage() {
             {error && (
               <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                 {error}
+                {signatureMissing && (
+                  selectedEdilId ? (
+                    <p className="mt-1">Pídele al edil que inicie sesión y suba su firma desde <strong>Mi perfil</strong>.</p>
+                  ) : (
+                    <p className="mt-1">
+                      <Link to="/perfil" className="font-semibold underline">Ir a Mi perfil para subir tu firma →</Link>
+                    </p>
+                  )
+                )}
               </div>
             )}
 
