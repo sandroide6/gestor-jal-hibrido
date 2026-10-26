@@ -7,7 +7,6 @@ const jwt     = require('jsonwebtoken');
 const app     = require('../app');
 const models  = require('../models');
 const totpService  = require('../services/totpService');
-const authService  = require('../services/authService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 

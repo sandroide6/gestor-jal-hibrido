@@ -1,6 +1,5 @@
 'use strict';
 const { Notification } = require('../models');
-const { Op } = require('sequelize');
 
 async function list(req, res, next) {
   try {

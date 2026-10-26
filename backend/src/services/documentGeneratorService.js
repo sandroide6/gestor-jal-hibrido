@@ -2,21 +2,16 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
 const {
   Document, Packer, Paragraph, TextRun, HeadingLevel,
   AlignmentType, Table, TableRow, TableCell, WidthType,
-  BorderStyle, Header, Footer, ImageRun, PageNumber,
+  ImageRun,
 } = require('docx');
-const { PDFDocument, rgb, StandardFonts, degrees } = require('pdf-lib');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 const ImageModule = require('docxtemplater-image-module-free');
 const mammoth = require('mammoth');
-const os = require('os');
-
-const execFileAsync = promisify(execFile);
 const wordConverter = require('./wordConverter');
 const libreOfficeConverter = require('./libreOfficeConverter');
 
@@ -27,7 +22,7 @@ const TEMPLATES_ROOT = path.resolve(process.env.TEMPLATES_PATH || path.join(BACK
 // ─── Helpers ─────────────────────────────────────────────
 
 function sanitizePath(str) {
-  return String(str).replace(/[^a-zA-Z0-9_\-]/g, '_').slice(0, 80);
+  return String(str).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80);
 }
 
 function buildOutputDir(jalId, docTypeName, beneficiaryId) {
@@ -176,7 +171,7 @@ function resolveTemplatePath(templatePath) {
   return resolved;
 }
 
-async function generateDocxFromTemplate({ templatePath, templateData, data, signatureBuffer, signatureMime, signaturePath }) {
+async function generateDocxFromTemplate({ templatePath, templateData, data, signatureBuffer, signaturePath }) {
   let content;
   if (templateData) {
     const b64 = templateData.includes(',') ? templateData.split(',')[1] : templateData;
@@ -189,7 +184,6 @@ async function generateDocxFromTemplate({ templatePath, templateData, data, sign
   // Convertir signaturePath a buffer si no viene buffer directo
   if (!signatureBuffer && signaturePath && fs.existsSync(signaturePath)) {
     signatureBuffer = fs.readFileSync(signaturePath);
-    signatureMime = path.extname(signaturePath).toLowerCase() === '.png' ? 'image/png' : 'image/jpeg';
   }
 
   const zip = new PizZip(content);

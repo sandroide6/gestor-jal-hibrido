@@ -27,8 +27,8 @@ Genera documentos oficiales DOCX y PDF, funciona offline y permite acceso remoto
 | Capa | Tecnología |
 |------|------------|
 | Frontend | React 18 + Vite + Tailwind CSS + PWA (offline) |
-| Backend | Node.js 24 + Express + Sequelize |
-| Base de datos | PostgreSQL (Windows) |
+| Backend | Node.js 20+ (probado con 22) + Express + Sequelize |
+| Base de datos | PostgreSQL: local en Windows o Supabase en el despliegue híbrido |
 | Gráficas | Recharts 3 |
 | Acceso remoto | ngrok (dominio estático gratuito) |
 | Scripts de gestión | Python 3.10+ con venv |
@@ -129,6 +129,41 @@ set NGROK_DOMAIN=tu-dominio.ngrok-free.dev
 
 ---
 
+## Despliegue en la nube
+
+El despliegue actual (frontend en Vercel, backend en Render, base de datos en Supabase)
+está documentado paso a paso en [`docs/DESPLIEGUE_HIBRIDO.md`](docs/DESPLIEGUE_HIBRIDO.md).
+Las variables del backend en Render están en `deploy/render/.env.example`.
+
+---
+
+## Pruebas y verificación
+
+Requiere un PostgreSQL accesible para los tests de `/health` y CORS (el resto mockea la BD).
+
+```bash
+# Backend
+cd backend
+npm ci
+export DATABASE_URL=postgresql://postgres:postgres@localhost:5432/gestor_jal_test
+npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all
+npm run lint
+npm test
+
+# Frontend
+cd frontend
+npm ci
+npm run lint
+npm test
+npm run build
+```
+
+Desde la raíz, `npm test` ejecuta ambas suites. GitHub Actions (`.github/workflows/ci.yml`)
+corre lo mismo en cada pull request. El informe de la última auditoría está en
+[`docs/AUDITORIA_2026-10.md`](docs/AUDITORIA_2026-10.md).
+
+---
+
 ## Estructura del proyecto
 
 ```
@@ -184,6 +219,8 @@ DB_USER=postgres
 DB_PASSWORD=1234
 
 JWT_SECRET=cambia_esto_en_produccion
+ENCRYPTION_KEY=otra_clave_aleatoria   # obligatoria con NODE_ENV=production
+METRICS_TOKEN=                        # opcional: Bearer para GET /metrics
 
 PORT=3001
 NODE_ENV=development
@@ -249,6 +286,9 @@ El módulo de backup permite guardar copias de seguridad cifradas en Google Driv
 ---
 
 ## Backups (línea de comandos)
+
+> En una base de datos real, define `ADMIN_INITIAL_PASSWORD` antes de `db:seed:all`
+> para no crear el administrador con la contraseña de ejemplo.
 
 ### Crear backup
 ```bat

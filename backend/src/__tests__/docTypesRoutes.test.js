@@ -36,7 +36,6 @@ describe('GET /v1/doc-types — autenticación', () => {
 describe('POST /v1/doc-types — validación', () => {
   it('400 si body vacío', async () => {
     mockUser();
-    const fd = Buffer.from(JSON.stringify({}));
     const res = await request(app)
       .post('/v1/doc-types')
       .set('Authorization', `Bearer ${adminToken()}`)

@@ -12,8 +12,8 @@ function getPizZip() {
 function getExcelJS() {
   return require('exceljs');
 }
-const schemas = require('../validations/admin');
-const { Document, DocType, User, AuditLog, sequelize } = require('../models');
+const { Document, DocType, User, AuditLog } = require('../models');
+const { addDocumentsToZip } = require('../services/driveBackupService');
 const audit = require('../services/auditService');
 
 
@@ -85,7 +85,6 @@ async function backup(req, res, next) {
       counts: { documents: docs.length, docTypes: docTypes.length, users: users.length },
     }, null, 2));
 
-    zip.file('data/documentos.json', JSON.stringify(docs.map(d => d.toJSON()), null, 2));
     zip.file('data/tipos_documento.json', JSON.stringify(docTypes.map(d => d.toJSON()), null, 2));
     zip.file('data/usuarios.json', JSON.stringify(
       users.map(u => {
@@ -96,19 +95,8 @@ async function backup(req, res, next) {
       null, 2
     ));
 
-    // ── Archivos de documentos ────────────────────────────────
-    let filesAdded = 0;
-    for (const doc of docs) {
-      const safeName = `${doc.id}`;
-      if (doc.file_path_docx && fs.existsSync(doc.file_path_docx)) {
-        zip.file(`archivos/${safeName}.docx`, fs.readFileSync(doc.file_path_docx));
-        filesAdded++;
-      }
-      if (doc.file_path_pdf && fs.existsSync(doc.file_path_pdf)) {
-        zip.file(`archivos/${safeName}.pdf`, fs.readFileSync(doc.file_path_pdf));
-        filesAdded++;
-      }
-    }
+    // ── Documentos (JSON + archivos) ─────────────────────────
+    const filesAdded = addDocumentsToZip(zip, docs);
 
     // ── Plantillas de tipos de documento ─────────────────────
     for (const dt of docTypes) {
@@ -276,6 +264,7 @@ async function exportData(req, res, next) {
       where,
       include: [{ model: User, as: 'author', attributes: ['name', 'email'] }],
       order: [['created_at', 'DESC']],
+      attributes: { exclude: ['file_docx'] }, // solo se exportan los PDF
     });
 
     const PizZip = getPizZip();
@@ -290,8 +279,12 @@ async function exportData(req, res, next) {
         ? doc.document_number.replace(/[^a-zA-Z0-9_-]/g, '_')
         : doc.id.slice(0, 8);
       const folder = `documentos/${doc.doc_type_name.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
-      if (doc.file_path_pdf && fs.existsSync(doc.file_path_pdf)) {
-        zip.file(`${folder}/${safeName}.pdf`, fs.readFileSync(doc.file_path_pdf));
+      // Disco si existe; si no, la copia en BD (en Render el disco no persiste).
+      const pdf = doc.file_path_pdf && fs.existsSync(doc.file_path_pdf)
+        ? fs.readFileSync(doc.file_path_pdf)
+        : doc.file_pdf;
+      if (pdf) {
+        zip.file(`${folder}/${safeName}.pdf`, pdf);
         filesAdded++;
       }
     }

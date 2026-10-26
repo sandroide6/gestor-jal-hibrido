@@ -27,7 +27,8 @@ module.exports = {
 
     // Administrador inicial
     // Contraseña: Admin1234! — CAMBIAR después del primer login
-    const passwordHash = await bcrypt.hash('Admin1234!', 12);
+    // Contraseña conocida solo para desarrollo: en una BD real define ADMIN_INITIAL_PASSWORD.
+    const passwordHash = await bcrypt.hash(process.env.ADMIN_INITIAL_PASSWORD || 'Admin1234!', 12);
 
     await queryInterface.bulkInsert(
       'users',

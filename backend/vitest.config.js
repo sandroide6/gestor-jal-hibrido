@@ -12,6 +12,8 @@ export default defineConfig({
       JWT_PRIVATE_KEY: '',
       JWT_PUBLIC_KEY: '',
       JWT_SECRET: 'dev-secret-change-in-production',
+      // env.js exige DATABASE_URL al cargar app.js; los tests mockean los modelos y nunca conectan.
+      DATABASE_URL: process.env.DATABASE_URL || 'postgresql://test:test@localhost:5432/gestor_jal_test',
     },
     coverage: {
       provider: 'v8',

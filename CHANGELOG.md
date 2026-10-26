@@ -7,9 +7,18 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 
 ## [Sin publicar] — 2026-10-26
 
+### Seguridad
+- `authenticate` solo acepta access tokens: el token temporal `2fa_pending` y el refresh token ya no sirven como sesión (permitían operar sin el segundo factor)
+- Backups locales aislados por JAL (nombre `backup_jal_<jal_id>_...`): un admin ya no puede listar ni descargar los de otra JAL
+- `GET /metrics` responde 404 en producción salvo `Authorization: Bearer $METRICS_TOKEN`
+- Los 5xx en producción ya no devuelven el mensaje interno del error
+- Dependencias vulnerables actualizadas dentro de su rango semver (proxy-addr, body-parser, qs, joi, @xmldom/xmldom, nanoid, react-router…)
+
 ### Agregado
 - **Pantalla de Inicio por tareas** (`/inicio`, destino tras iniciar sesión para todos los roles): un botón por tipo de documento, aviso si falta registrar la firma, acceso a revisión para edil/administrador y **Mis documentos recientes** con descarga PDF/Word (la auxiliar no tenía forma de volver a encontrar lo que creó; usa `GET /documents/my`, que ya existía)
 - **Revisión antes de emitir**: resumen de los datos con «Sí, crear el documento» / «Corregir datos» antes de asignar el radicado
+- Workflow de CI (`.github/workflows/ci.yml`): lint, migraciones, tests y build
+- `ADMIN_INITIAL_PASSWORD` para el seeder del administrador
 
 ### Cambiado
 - Generador: un clic en el tipo abre el formulario (sin «Continuar»), la fecha de expedición se precarga con hoy, la selección de edil pasa al formulario, foco al primer campo con error, mensajes que dicen qué pasó y que los datos siguen ahí, y al terminar se indica dónde quedó guardado
@@ -19,6 +28,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 ### Corregido
 - **El Certificado de Residencia salía con «La ciudadana undefined, identificada con undefined»**: la plantilla usa `{Nombre}` y `{tipodeidentificacion}` y el tipo sembrado no los pedía. Ahora las etiquetas se emparejan sin distinguir mayúsculas ni tildes, y si una plantilla pide un dato que ningún campo llena, el documento no se emite (422) y el mensaje dice qué campo agregar
 - Icono roto de «Generar documento» en el menú
+- La retención de backups en Drive podía borrar permanentemente la carpeta "Documentos generados" (ahora solo cuenta los zips de backup)
+- `PUT /v1/backup/drive/config` valida sus campos; un `retention_count` negativo borraba todos los backups
+- `POST /v1/backup/drive/open-folder` responde 501 fuera de Windows en vez de tumbar el proceso
+- Backups y exportación incluyen los archivos desde la copia en BD cuando no están en disco (Render)
+- 14 suites de tests del backend no cargaban por falta de `DATABASE_URL`; lockfiles desincronizados hacían fallar `npm ci`
+- Lint de backend y frontend sin errores
+
+### Rendimiento
+- Exportación Excel de documentos sin cargar las columnas BYTEA (300 documentos: ~700 ms → ~25 ms)
 
 ---
 

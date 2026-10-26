@@ -7,4 +7,14 @@ module.exports = {
     'no-unused-vars': ['warn', { argsIgnorePattern: '^_|next' }],
     'no-console': 'off',
   },
+  overrides: [
+    {
+      // vitest.config.js usa globals: true
+      files: ['src/__tests__/**/*.js', 'tests/**/*.js'],
+      globals: {
+        vi: 'readonly', describe: 'readonly', it: 'readonly', expect: 'readonly',
+        beforeAll: 'readonly', afterAll: 'readonly', beforeEach: 'readonly', afterEach: 'readonly',
+      },
+    },
+  ],
 };
