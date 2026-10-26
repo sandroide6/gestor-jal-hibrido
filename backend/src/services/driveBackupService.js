@@ -283,10 +283,20 @@ function getLocalBackupsPath() {
   return BACKUPS_LOCAL_PATH;
 }
 
-function listLocalBackups() {
+// Prefijo por JAL: sin él, el admin de una JAL podía listar/descargar los backups de
+// otra y la retención de una JAL borraba los zips de las demás.
+function localBackupPrefix(jalId) {
+  return `backup_jal_${jalId}_`;
+}
+
+function isLocalBackupOf(filename, jalId) {
+  return filename.endsWith('.zip') && (!jalId || filename.startsWith(localBackupPrefix(jalId)));
+}
+
+function listLocalBackups(jalId) {
   const dir = getLocalBackupsPath();
   return fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.zip'))
+    .filter((f) => isLocalBackupOf(f, jalId))
     .map((f) => {
       const stat = fs.statSync(path.join(dir, f));
       return { filename: f, size_bytes: stat.size, created_at: stat.birthtime };
@@ -294,15 +304,17 @@ function listLocalBackups() {
     .sort((a, b) => b.created_at - a.created_at);
 }
 
-function cleanLocalBackups(retention) {
+function cleanLocalBackups(retention, jalId) {
   const dir   = getLocalBackupsPath();
   const files = fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.zip'))
+    .filter((f) => isLocalBackupOf(f, jalId))
     .map((f) => ({ f, mtime: fs.statSync(path.join(dir, f)).mtimeMs }))
     .sort((a, b) => a.mtime - b.mtime);
   const toDelete = files.slice(0, Math.max(0, files.length - retention));
   for (const { f } of toDelete) {
-    try { fs.unlinkSync(path.join(dir, f)); } catch {}
+    try { fs.unlinkSync(path.join(dir, f)); } catch (err) {
+      logger.warn('cleanLocalBackups: no se pudo borrar un backup local', { file: f, error: err.message });
+    }
   }
 }
 
@@ -333,13 +345,13 @@ async function runBackup(jalId, userId, type = 'manual') {
     }
 
     const buffer   = await buildBackupBuffer(jalId);
-    const filename = `backup_jal_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`;
+    const filename = `${localBackupPrefix(jalId)}${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`;
 
     // Guardar copia local
     const localDir  = getLocalBackupsPath();
     const localPath = path.join(localDir, filename);
     fs.writeFileSync(localPath, buffer);
-    cleanLocalBackups(cfg.retention_count || 10);
+    cleanLocalBackups(cfg.retention_count || 10, jalId);
 
     const stream = new Readable();
     stream.push(buffer);
@@ -354,7 +366,10 @@ async function runBackup(jalId, userId, type = 'manual') {
     // Respetar retención: eliminar backups viejos
     const retention = cfg.retention_count || 10;
     const existing  = await drive.files.list({
-      q: `'${folderId}' in parents and trashed=false`,
+      // Solo los zips de backup: la subcarpeta "Documentos generados" vive en esta misma
+      // carpeta raíz y, sin este filtro, la retención la borraba (files.delete no pasa
+      // por la papelera) junto con todos los documentos subidos.
+      q: `'${folderId}' in parents and trashed=false and mimeType='application/zip' and name contains 'backup_jal_'`,
       orderBy: 'createdTime asc',
       fields: 'files(id)',
     });
@@ -464,4 +479,4 @@ async function checkAutoBackups() {
   }
 }
 
-module.exports = { getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };
+module.exports = { getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, isLocalBackupOf, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };

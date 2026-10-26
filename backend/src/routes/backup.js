@@ -8,7 +8,10 @@ const authenticate = require('../middleware/authenticate');
 const authorize    = require('../middleware/authorize');
 const { Jal, BackupLog } = require('../models');
 const drive = require('../services/driveBackupService');
+const logger = require('../config/logger');
 const { encryptJSON } = require('../utils/crypto');
+const validate = require('../middleware/validate');
+const { backupConfig } = require('../validations/backup');
 
 const router = Router();
 
@@ -74,7 +77,9 @@ router.get('/callback', async (req, res) => {
 
     goto('?connected=1');
   } catch (err) {
-    goto(`?error=${encodeURIComponent(err.message)}`);
+    // El mensaje crudo de Google/BD no va en la URL (queda en historial y logs de proxies).
+    logger.error('backup.callback: fallo conectando Google Drive', { jalId, error: err.message });
+    goto('?error=exchange_failed');
   }
 });
 
@@ -105,7 +110,7 @@ router.get('/config', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/config', async (req, res, next) => {
+router.put('/config', validate(backupConfig), async (req, res, next) => {
   try {
     const { auto_enabled, schedule, schedule_hour, schedule_day, retention_count } = req.body;
     const jal = await Jal.findByPk(req.user.jal_id);
@@ -185,7 +190,7 @@ router.get('/logs', async (req, res, next) => {
 // Listar archivos locales
 router.get('/local-files', (req, res, next) => {
   try {
-    res.json(drive.listLocalBackups());
+    res.json(drive.listLocalBackups(req.user.jal_id));
   } catch (err) { next(err); }
 });
 
@@ -193,7 +198,7 @@ router.get('/local-files', (req, res, next) => {
 router.get('/local-files/:filename', (req, res, next) => {
   try {
     const filename = path.basename(req.params.filename); // evitar path traversal
-    if (!filename.endsWith('.zip')) return res.status(400).json({ error: true, message: 'Archivo no válido' });
+    if (!drive.isLocalBackupOf(filename, req.user.jal_id)) return res.status(400).json({ error: true, message: 'Archivo no válido' });
     const filePath = path.join(drive.getLocalBackupsPath(), filename);
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: true, message: 'Archivo no encontrado' });
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -204,6 +209,11 @@ router.get('/local-files/:filename', (req, res, next) => {
 
 // Abrir carpeta en el explorador de Windows
 router.post('/open-folder', (req, res, next) => {
+  // explorer.exe solo existe en Windows; en Linux (Render) el spawn emitía 'error' sin
+  // manejar y tumbaba el proceso.
+  if (process.platform !== 'win32') {
+    return res.status(501).json({ error: true, message: 'Solo disponible en el servidor Windows' });
+  }
   try {
     const folderPath = drive.getLocalBackupsPath();
     // Validar que la ruta es absoluta y no contiene caracteres peligrosos
@@ -211,7 +221,9 @@ router.post('/open-folder', (req, res, next) => {
     if (!path.isAbsolute(folderPath) || /[;&|`$<>]/.test(folderPath)) {
       return res.status(400).json({ error: true, message: 'Ruta de carpeta no válida' });
     }
-    spawn('explorer.exe', [folderPath], { detached: true, stdio: 'ignore' }).unref();
+    spawn('explorer.exe', [folderPath], { detached: true, stdio: 'ignore' })
+      .on('error', (err) => logger.warn('backup.open-folder: no se pudo abrir el explorador', { error: err.message }))
+      .unref();
     res.json({ ok: true, path: folderPath });
   } catch (err) { next(err); }
 });
