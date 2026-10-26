@@ -3,7 +3,8 @@ const Joi = require('joi');
 const { FIELD_TYPES, TIPOS_TRAMITE } = require('../config/constants');
 
 const field = Joi.object({
-  name:        Joi.string().pattern(/^[a-z_][a-z0-9_]*$/).max(60).required(),
+  // Mayúsculas y tildes permitidas: el nombre debe coincidir con la {variable} de la plantilla (ej. {Nombre}, {dirección})
+  name:        Joi.string().pattern(/^[\p{L}_][\p{L}\d_]*$/u).max(60).required(),
   label:       Joi.string().max(200).required(),
   type:        Joi.string().valid(...FIELD_TYPES).required(),
   required:    Joi.boolean().default(true),

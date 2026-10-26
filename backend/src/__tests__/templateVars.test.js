@@ -30,3 +30,20 @@ describe('validateTemplateVars() con las plantillas reales ({variable})', () => 
     }
   });
 });
+
+describe('validación de campos (Joi) frente a las plantillas', () => {
+  const { update } = require('../validations/docTypes');
+
+  it('el admin puede guardar los tipos sembrados tal cual (nombres como {Nombre} o {dirección})', async () => {
+    let rows = [];
+    await seeder.up({ bulkInsert: async (_t, r) => { rows = r; } });
+    for (const r of rows) {
+      expect(update.validate({ fields: JSON.parse(r.fields) }).error, r.name).toBeUndefined();
+    }
+  });
+
+  it('sigue rechazando espacios y símbolos en el nombre del campo', () => {
+    expect(update.validate({ fields: [{ name: 'mi campo', label: 'x', type: 'text' }] }).error).toBeDefined();
+    expect(update.validate({ fields: [{ name: '{x}', label: 'x', type: 'text' }] }).error).toBeDefined();
+  });
+});

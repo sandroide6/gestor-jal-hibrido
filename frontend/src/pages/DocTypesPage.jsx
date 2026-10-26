@@ -53,11 +53,12 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
           <input
             className="input text-xs"
             placeholder="ej. num_sesion"
-            pattern="[a-z_][a-z0-9_]*"
+            pattern="[\p{L}_][\p{L}0-9_]*"
+            title="Igual que la variable de la plantilla, sin llaves: {Nombre} → Nombre"
             disabled={disabled}
             {...nameReg}
             onChange={(e) => {
-              e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+              e.target.value = e.target.value.replace(/[^\p{L}0-9_]/gu, '_');
               nameReg.onChange(e);
             }}
           />
