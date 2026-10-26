@@ -19,6 +19,7 @@ const E = {
   NOT_FOUND:                 'NOT_FOUND',
   CONFLICT:                  'CONFLICT',
   VALIDATION:                'VALIDATION',
+  SIGNATURE_MISSING:         'SIGNATURE_MISSING',
 
   // Server
   INTERNAL:                  'INTERNAL',
