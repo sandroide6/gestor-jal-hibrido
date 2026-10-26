@@ -1,6 +1,6 @@
 'use strict';
 const { v4: uuidv4 } = require('uuid');
-const { Document, DocType, Jal, User, SyncQueue } = require('../models');
+const { Document, DocType, Jal, User } = require('../models');
 // Ver el mismo comentario en documentService.js — diferido para no pagar el costo de
 // requerir docx/pdf-lib/docxtemplater/mammoth/pizzip en cada arranque del proceso.
 function getDocumentGeneratorService() {
@@ -10,8 +10,6 @@ const radicadoService = require('./radicadoService');
 const documentNumberService = require('./documentNumberService');
 const audit = require('./auditService');
 const notify = require('./notificationService');
-
-const MAX_RETRIES = 5;
 
 // Procesa una operación 'create' de documento offline
 async function processDocumentCreate({ localId, data, userId, jalId, ip }) {

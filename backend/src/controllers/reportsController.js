@@ -7,7 +7,7 @@ function getExcelJS() {
   return require('exceljs');
 }
 const { Op } = require('sequelize');
-const { Document, DocType, User } = require('../models');
+const { Document, User } = require('../models');
 const audit = require('../services/auditService');
 
 
@@ -39,6 +39,9 @@ async function exportDocuments(req, res, next) {
         { model: User, as: 'reviewer', attributes: ['name'], required: false },
       ],
       order: [['created_at', 'DESC']],
+      // El Excel solo usa metadatos; cargar las copias BYTEA costaba ~0,7 s y >100 MB
+      // de RAM por cada 300 documentos.
+      attributes: { exclude: ['file_docx', 'file_pdf'] },
     });
 
     const ExcelJS = getExcelJS();

@@ -102,7 +102,14 @@ const storagePath = process.env.STORAGE_PATH || path.join(__dirname, '..', 'data
 fs.mkdirSync(storagePath, { recursive: true });
 
 // ── Métricas Prometheus (solo acceso interno) ──────────────
-app.get('/metrics', async (_req, res) => {
+// En Render el backend es público y nginx no está delante: sin METRICS_TOKEN las
+// métricas solo se sirven fuera de producción.
+app.get('/metrics', async (req, res) => {
+  const token = process.env.METRICS_TOKEN;
+  const allowed = token
+    ? req.headers.authorization === `Bearer ${token}`
+    : process.env.NODE_ENV !== 'production';
+  if (!allowed) return res.status(404).json({ error: true, message: 'Ruta no encontrada' });
   res.set('Content-Type', register.contentType);
   res.end(await register.metrics());
 });

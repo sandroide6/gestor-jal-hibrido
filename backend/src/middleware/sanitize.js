@@ -8,6 +8,7 @@ function sanitizeStrings(obj) {
     const val = obj[key];
     if (typeof val === 'string') {
       // Eliminar caracteres NUL y de control (excepto \t, \n, \r)
+      // eslint-disable-next-line no-control-regex -- eliminarlos es justo el propósito
       obj[key] = val.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
     } else if (typeof val === 'object' && val !== null) {
       sanitizeStrings(val);

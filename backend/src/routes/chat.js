@@ -186,7 +186,9 @@ router.post('/', authenticate, chatLimiter, async (req, res) => {
           const text = parsed?.message?.content;
           if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`);
           if (parsed.done) { res.write('data: [DONE]\n\n'); res.end(); }
-        } catch {}
+        } catch {
+          // línea parcial o no-JSON del stream de Ollama: se ignora
+        }
       }
     });
     ollamaRes.on('end', () => { res.write('data: [DONE]\n\n'); res.end(); });

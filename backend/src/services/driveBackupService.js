@@ -2,7 +2,7 @@
 const { Readable } = require('stream');
 const fs = require('fs');
 const path = require('path');
-const { Document, DocType, User, Jal, BackupLog } = require('../models');
+const { Document, DocType, Jal, BackupLog } = require('../models');
 const { decryptJSON } = require('../utils/crypto');
 const logger = require('../config/logger');
 
@@ -221,6 +221,25 @@ async function deleteDriveFiles(jalId, driveFileIds = []) {
   }
 }
 
+// Escribe data/documentos.json (sin el binario) y archivos/<id>.docx|pdf. El binario
+// sale del disco si existe y, si no, de la copia en BD (file_docx/file_pdf) — en Render
+// el disco no persiste y antes el zip quedaba sin archivos, mientras el JSON cargaba
+// los bytes serializados como arreglos de números.
+function addDocumentsToZip(zip, docs) {
+  let filesAdded = 0;
+  zip.file('data/documentos.json', JSON.stringify(docs.map((d) => {
+    const j = d.toJSON(); delete j.file_docx; delete j.file_pdf; return j;
+  }), null, 2));
+  for (const doc of docs) {
+    for (const ext of ['docx', 'pdf']) {
+      const filePath = doc[`file_path_${ext}`];
+      const bytes = filePath && fs.existsSync(filePath) ? fs.readFileSync(filePath) : doc[`file_${ext}`];
+      if (bytes) { zip.file(`archivos/${doc.id}.${ext}`, bytes); filesAdded++; }
+    }
+  }
+  return filesAdded;
+}
+
 async function buildBackupBuffer(jalId) {
   const [docs, docTypes] = await Promise.all([
     Document.findAll({ where: { jal_id: jalId } }),
@@ -229,7 +248,6 @@ async function buildBackupBuffer(jalId) {
 
   const PizZip = getPizZip();
   const zip = new PizZip();
-  const storagePath = process.env.STORAGE_PATH || path.join(__dirname, '../../data/output');
   const templatesPath = process.env.TEMPLATES_PATH || path.join(__dirname, '../../plantillas');
 
   zip.file('manifest.json', JSON.stringify({
@@ -238,19 +256,10 @@ async function buildBackupBuffer(jalId) {
     counts: { documents: docs.length, docTypes: docTypes.length },
   }, null, 2));
 
-  zip.file('data/documentos.json', JSON.stringify(docs.map(d => d.toJSON()), null, 2));
+  addDocumentsToZip(zip, docs);
   zip.file('data/tipos_documento.json', JSON.stringify(docTypes.map(d => {
     const t = d.toJSON(); delete t.template_data; return t;
   }), null, 2));
-
-  // Archivos de documentos
-  for (const doc of docs) {
-    const id = doc.id;
-    if (doc.file_path_docx && fs.existsSync(doc.file_path_docx))
-      zip.file(`archivos/${id}.docx`, fs.readFileSync(doc.file_path_docx));
-    if (doc.file_path_pdf && fs.existsSync(doc.file_path_pdf))
-      zip.file(`archivos/${id}.pdf`, fs.readFileSync(doc.file_path_pdf));
-  }
 
   // Plantillas
   for (const dt of docTypes) {
@@ -283,10 +292,20 @@ function getLocalBackupsPath() {
   return BACKUPS_LOCAL_PATH;
 }
 
-function listLocalBackups() {
+// Prefijo por JAL: sin él, el admin de una JAL podía listar/descargar los backups de
+// otra y la retención de una JAL borraba los zips de las demás.
+function localBackupPrefix(jalId) {
+  return `backup_jal_${jalId}_`;
+}
+
+function isLocalBackupOf(filename, jalId) {
+  return filename.endsWith('.zip') && (!jalId || filename.startsWith(localBackupPrefix(jalId)));
+}
+
+function listLocalBackups(jalId) {
   const dir = getLocalBackupsPath();
   return fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.zip'))
+    .filter((f) => isLocalBackupOf(f, jalId))
     .map((f) => {
       const stat = fs.statSync(path.join(dir, f));
       return { filename: f, size_bytes: stat.size, created_at: stat.birthtime };
@@ -294,15 +313,17 @@ function listLocalBackups() {
     .sort((a, b) => b.created_at - a.created_at);
 }
 
-function cleanLocalBackups(retention) {
+function cleanLocalBackups(retention, jalId) {
   const dir   = getLocalBackupsPath();
   const files = fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.zip'))
+    .filter((f) => isLocalBackupOf(f, jalId))
     .map((f) => ({ f, mtime: fs.statSync(path.join(dir, f)).mtimeMs }))
     .sort((a, b) => a.mtime - b.mtime);
   const toDelete = files.slice(0, Math.max(0, files.length - retention));
   for (const { f } of toDelete) {
-    try { fs.unlinkSync(path.join(dir, f)); } catch {}
+    try { fs.unlinkSync(path.join(dir, f)); } catch (err) {
+      logger.warn('cleanLocalBackups: no se pudo borrar un backup local', { file: f, error: err.message });
+    }
   }
 }
 
@@ -333,13 +354,13 @@ async function runBackup(jalId, userId, type = 'manual') {
     }
 
     const buffer   = await buildBackupBuffer(jalId);
-    const filename = `backup_jal_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`;
+    const filename = `${localBackupPrefix(jalId)}${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.zip`;
 
     // Guardar copia local
     const localDir  = getLocalBackupsPath();
     const localPath = path.join(localDir, filename);
     fs.writeFileSync(localPath, buffer);
-    cleanLocalBackups(cfg.retention_count || 10);
+    cleanLocalBackups(cfg.retention_count || 10, jalId);
 
     const stream = new Readable();
     stream.push(buffer);
@@ -354,7 +375,10 @@ async function runBackup(jalId, userId, type = 'manual') {
     // Respetar retención: eliminar backups viejos
     const retention = cfg.retention_count || 10;
     const existing  = await drive.files.list({
-      q: `'${folderId}' in parents and trashed=false`,
+      // Solo los zips de backup: la subcarpeta "Documentos generados" vive en esta misma
+      // carpeta raíz y, sin este filtro, la retención la borraba (files.delete no pasa
+      // por la papelera) junto con todos los documentos subidos.
+      q: `'${folderId}' in parents and trashed=false and mimeType='application/zip' and name contains 'backup_jal_'`,
       orderBy: 'createdTime asc',
       fields: 'files(id)',
     });
@@ -464,4 +488,4 @@ async function checkAutoBackups() {
   }
 }
 
-module.exports = { getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };
+module.exports = { addDocumentsToZip, getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, isLocalBackupOf, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };

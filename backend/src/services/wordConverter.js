@@ -27,8 +27,8 @@ class WordConverter {
       await this._request({ id, docx: tmpIn, pdf: tmpOut });
       return fs.readFileSync(tmpOut);
     } finally {
-      try { fs.unlinkSync(tmpIn);  } catch {}
-      try { fs.unlinkSync(tmpOut); } catch {}
+      try { fs.unlinkSync(tmpIn);  } catch { /* temporal ya borrado */ }
+      try { fs.unlinkSync(tmpOut); } catch { /* temporal ya borrado */ }
     }
   }
 
@@ -69,7 +69,7 @@ class WordConverter {
               const cb = this._pending.get(msg.id);
               if (cb) { this._pending.delete(msg.id); cb(msg); }
             }
-          } catch {}
+          } catch { /* salida de PowerShell que no es JSON */ }
         }
       });
 
@@ -121,7 +121,7 @@ class WordConverter {
 
   shutdown() {
     if (this._proc) {
-      try { this._proc.stdin.end(); } catch {}
+      try { this._proc.stdin.end(); } catch { /* proceso ya cerrado */ }
       this._proc = null;
       this._ready = false;
     }

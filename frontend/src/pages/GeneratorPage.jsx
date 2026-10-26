@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useSyncStore } from '../stores/syncStore';
 import { generateDocument, getDownloadUrls, downloadDocument, cacheEdilSignature } from '../services/documentService';
-import { triggerBlobDownload } from '../services/clientDocumentGenerator';
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useEdiles } from '../hooks/useEdiles';
 import DynamicForm from '../components/forms/DynamicForm';
@@ -355,6 +354,7 @@ export default function GeneratorPage() {
                         try {
                           const name = `${selectedType?.name}_${result.beneficiaryName}.${fmt}`;
                           if (hasOfflineBlob) {
+                            const { triggerBlobDownload } = await import('../services/clientDocumentGenerator');
                             triggerBlobDownload(result.offlineBlobs[fmt], name);
                           } else {
                             await downloadDocument(result.id, fmt, token, name);

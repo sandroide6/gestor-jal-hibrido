@@ -311,7 +311,7 @@ async function deleteDocument(id, jalId, deletedBy, ip) {
   // Eliminar archivos físicos (sin lanzar error si ya no existen)
   const fs = require('fs');
   for (const filePath of [doc.file_path_docx, doc.file_path_pdf]) {
-    if (filePath) { try { fs.unlinkSync(filePath); } catch {} }
+    if (filePath) { try { fs.unlinkSync(filePath); } catch { /* ya no estaba en disco (la copia en BD es la fuente) */ } }
   }
 
   // Fire-and-forget: propaga el borrado a la copia en Drive (si se subió una). No

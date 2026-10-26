@@ -51,6 +51,13 @@ async function authenticate(req, res, next) {
     });
   }
 
+  // Solo los access tokens carecen de `type`. Un refresh token o, peor, el token
+  // temporal '2fa_pending' (emitido tras la contraseña pero ANTES del código TOTP) no
+  // deben servir como sesión: permitirían saltarse el segundo factor.
+  if (payload.type) {
+    return res.status(401).json({ error: true, code: E.AUTH_TOKEN_INVALID, message: 'Token inválido' });
+  }
+
   if (fromCookie && MUTATING_METHODS.has(req.method) && !csrfValid(req)) {
     return res.status(403).json({ error: true, code: E.FORBIDDEN, message: 'Token CSRF inválido o ausente' });
   }

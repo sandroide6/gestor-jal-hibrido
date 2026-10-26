@@ -98,7 +98,7 @@ export default function ChatWidget() {
       const decoder = new TextDecoder();
       let buf = '';
 
-      while (true) {
+      for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
