@@ -5,11 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../services/api';
 
-const ROLE_REDIRECT = {
-  administrador: '/admin',
-  edil: '/edil',
-  auxiliar: '/generador',
-};
 
 
 export default function LoginPage() {
@@ -40,7 +35,7 @@ export default function LoginPage() {
         if (!result.consent_accepted_at) {
           navigate('/habeas-data', { replace: true });
         } else {
-          navigate(ROLE_REDIRECT[result.role] || '/', { replace: true });
+          navigate('/inicio', { replace: true });
         }
       }
     } catch (err) {
@@ -60,7 +55,7 @@ export default function LoginPage() {
       const data = await api.post('/auth/2fa/validate', { tempToken, token: totpCode });
       const { completeLogin } = useAuthStore.getState();
       await completeLogin(data.user);
-      navigate(ROLE_REDIRECT[data.user.role] || '/', { replace: true });
+      navigate('/inicio', { replace: true });
     } catch (err) {
       setTotpError(err.status === 401 ? 'Código incorrecto. Intenta de nuevo.' : 'Error al verificar. Intenta de nuevo.');
       setTotpCode('');

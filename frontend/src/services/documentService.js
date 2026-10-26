@@ -218,6 +218,11 @@ export async function downloadDocument(docId, format, token, filename) {
   );
 }
 
+// Documentos creados por el usuario actual (más recientes primero)
+export async function fetchMyDocuments(limit, token) {
+  return api.get(`/documents/my?limit=${limit}`, { token });
+}
+
 export async function deleteDocument(docId, token) {
   return api.delete(`/documents/${docId}`, { token });
 }

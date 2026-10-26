@@ -221,16 +221,18 @@ export default function ProfilePage() {
               </div>
             </div>
           ) : (
-            <div
+            <button
+              type="button"
               onClick={() => fileRef.current?.click()}
-              className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-jal-blue-400 hover:bg-blue-50/30 transition-colors"
+              disabled={uploadingFirma}
+              className="w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-jal-blue-400 hover:bg-blue-50/30 focus:outline-none focus:ring-2 focus:ring-jal-blue-400 transition-colors"
             >
               <div className="text-3xl mb-2 text-gray-400 select-none">✍</div>
               <p className="text-sm text-gray-600 font-medium">
                 {uploadingFirma ? 'Subiendo…' : 'Haz clic para subir tu firma'}
               </p>
-              <p className="text-xs text-gray-400 mt-1">PNG o JPG · máx. 5 MB</p>
-            </div>
+              <p className="text-sm text-gray-500 mt-1">Una foto o imagen de tu firma, en PNG o JPG (máx. 5 MB)</p>
+            </button>
           )}
 
           <input

@@ -113,7 +113,7 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
             placeholder={field.placeholder ?? ''}
           />
           <div className="flex justify-end mt-0.5">
-            <span className={`text-xs ${len > max * 0.9 ? 'text-amber-500' : 'text-gray-400'}`}>
+            <span className={`text-sm ${len > max * 0.9 ? 'text-amber-700' : 'text-gray-500'}`}>
               {len}/{max}
             </span>
           </div>
@@ -166,12 +166,12 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
             onChange={(e) => onChange(field.name, e.target.checked ? 'Sí' : 'No')}
             onBlur={onBlur}
             disabled={disabled}
-            className="w-4 h-4 rounded accent-jal-blue-500"
+            className="w-5 h-5 rounded accent-jal-blue-500"
             aria-invalid={hasError || undefined}
             aria-describedby={hasError ? `err-${id}` : undefined}
           />
           {field.placeholder && (
-            <span className="text-sm text-gray-600">{field.placeholder}</span>
+            <span className="text-gray-700">{field.placeholder}</span>
           )}
         </div>
       );
@@ -197,9 +197,9 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
                   onBlur();
                 }}
                 disabled={disabled}
-                className="w-3.5 h-3.5 rounded accent-jal-blue-500"
+                className="w-5 h-5 rounded accent-jal-blue-500"
               />
-              <span className="text-sm text-gray-700">{opt}</span>
+              <span className="text-gray-800">{opt}</span>
             </label>
           ))}
         </div>
@@ -363,7 +363,8 @@ export default function DynamicForm({
           <div key={field.name}>
             <label className="label" htmlFor={field.name}>
               {field.label}
-              {field.required && <span className="text-red-500 ml-1">*</span>}
+              {field.required && <span className="text-red-600 ml-1" aria-hidden="true">*</span>}
+              {field.required && <span className="sr-only"> (obligatorio)</span>}
             </label>
             <FieldInput
               field={field}
@@ -374,8 +375,8 @@ export default function DynamicForm({
               hasError={showError}
             />
             {showError && (
-              <p id={`err-${field.name}`} role="alert" className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <p id={`err-${field.name}`} role="alert" className="text-sm text-red-700 mt-1 flex items-center gap-1">
+                <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                 </svg>
                 {err}

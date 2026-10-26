@@ -59,7 +59,7 @@ describe('LoginPage — envío de credenciales', () => {
     await fillAndSubmit(user);
 
     await waitFor(() => expect(loginMock).toHaveBeenCalledWith('auxiliar@jal.gov.co', 'secreto123', false));
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/generador', { replace: true }));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/inicio', { replace: true }));
   });
 
   it('redirige a habeas-data si el usuario no ha aceptado el consentimiento', async () => {
@@ -157,7 +157,7 @@ describe('LoginPage — flujo 2FA', () => {
       tempToken: 'temp-abc', token: '123456',
     }));
     expect(completeLoginMock).toHaveBeenCalledWith({ role: 'administrador' });
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/admin', { replace: true }));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/inicio', { replace: true }));
   });
 
   it('muestra error si el código TOTP es incorrecto', async () => {

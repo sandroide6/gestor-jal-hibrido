@@ -3,11 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../services/api';
 
-const ROLE_REDIRECT = {
-  administrador: '/admin',
-  edil: '/edil',
-  auxiliar: '/generador',
-};
 
 export default function HabeasDataPage() {
   const { token, user, setUser } = useAuthStore();
@@ -21,7 +16,7 @@ export default function HabeasDataPage() {
     try {
       const data = await api.post('/auth/consent', {}, { token });
       await setUser({ ...user, consent_accepted_at: data.consent_accepted_at });
-      navigate(ROLE_REDIRECT[user?.role] || '/', { replace: true });
+      navigate('/inicio', { replace: true });
     } catch {
       setError('No se pudo registrar el consentimiento. Intenta de nuevo.');
     } finally {

@@ -5,6 +5,23 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 
 ---
 
+## [Sin publicar] — 2026-10-26
+
+### Agregado
+- **Pantalla de Inicio por tareas** (`/inicio`, destino tras iniciar sesión para todos los roles): un botón por tipo de documento, aviso si falta registrar la firma, acceso a revisión para edil/administrador y **Mis documentos recientes** con descarga PDF/Word (la auxiliar no tenía forma de volver a encontrar lo que creó; usa `GET /documents/my`, que ya existía)
+- **Revisión antes de emitir**: resumen de los datos con «Sí, crear el documento» / «Corregir datos» antes de asignar el radicado
+
+### Cambiado
+- Generador: un clic en el tipo abre el formulario (sin «Continuar»), la fecha de expedición se precarga con hoy, la selección de edil pasa al formulario, foco al primer campo con error, mensajes que dicen qué pasó y que los datos siguen ahí, y al terminar se indica dónde quedó guardado
+- Legibilidad: botones y campos de 44 px y texto de 16 px, etiquetas de menú comprensibles («Crear documento», «Buscar documentos», «Copias de seguridad»), barra lateral sin textos cortados
+- La subida de firma en Mi perfil se puede usar con teclado
+
+### Corregido
+- **El Certificado de Residencia salía con «La ciudadana undefined, identificada con undefined»**: la plantilla usa `{Nombre}` y `{tipodeidentificacion}` y el tipo sembrado no los pedía. Ahora las etiquetas se emparejan sin distinguir mayúsculas ni tildes, y si una plantilla pide un dato que ningún campo llena, el documento no se emite (422) y el mensaje dice qué campo agregar
+- Icono roto de «Generar documento» en el menú
+
+---
+
 ## [2.0.0] — 2026-05-14
 
 ### Agregado
