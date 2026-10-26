@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useSyncStore } from '../stores/syncStore';
 import { generateDocument, downloadDocument, cacheEdilSignature, fetchMyRecentDocuments } from '../services/documentService';
-import { triggerBlobDownload } from '../services/clientDocumentGenerator';
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useEdiles } from '../hooks/useEdiles';
 import { useAsync } from '../hooks/useAsync';
@@ -132,8 +131,13 @@ export default function GeneratorPage() {
   async function handleDownload(docId, fmt, name, offlineBlob) {
     setDownloading(`${docId}:${fmt}`);
     try {
-      if (offlineBlob) triggerBlobDownload(offlineBlob, name);
-      else await downloadDocument(docId, fmt, token, name);
+      if (offlineBlob) {
+        // Import dinámico: el generador offline (chunk docs, ~370 KB gzip) solo se carga sin conexión
+        const { triggerBlobDownload } = await import('../services/clientDocumentGenerator');
+        triggerBlobDownload(offlineBlob, name);
+      } else {
+        await downloadDocument(docId, fmt, token, name);
+      }
     } catch (e) {
       setError(e.message);
     } finally {
