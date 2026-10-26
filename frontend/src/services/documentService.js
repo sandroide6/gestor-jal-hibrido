@@ -231,3 +231,9 @@ export async function cacheEdilSignature(edilId, token) {
     if (err?.status !== 404) console.warn('[JAL] No se pudo cachear firma del edil:', err.message);
   }
 }
+
+// Últimos documentos generados por el usuario actual (cualquier rol puede descargar los suyos)
+export async function fetchMyRecentDocuments(token, limit = 5) {
+  const res = await api.get(`/documents/my?limit=${limit}`, { token });
+  return res.data ?? [];
+}

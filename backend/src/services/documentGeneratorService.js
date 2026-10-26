@@ -217,6 +217,9 @@ async function generateDocxFromTemplate({ templatePath, templateData, data, sign
     paragraphLoop: true,
     linebreaks: true,
     delimiters: { start: '{', end: '}' },
+    // Sin esto docxtemplater escribe "undefined" en el documento oficial si la plantilla
+    // usa una variable sin campo; el admin ya recibe el aviso al subir la plantilla.
+    nullGetter: () => '',
   });
   tpl.render(renderData);
   return tpl.getZip().generate({ type: 'nodebuffer', compression: 'DEFLATE' });

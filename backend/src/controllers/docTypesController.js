@@ -22,15 +22,16 @@ function extractDocxVariables(buffer) {
     const zip = new PizZip(buffer);
     const xml = zip.file('word/document.xml')?.asText() || '';
     const clean = xml.replace(/<[^>]+>/g, '');
-    const matches = clean.match(/\{\{([^}]+)\}\}/g) || [];
-    return [...new Set(matches.map((m) => m.replace(/\{\{|\}\}/g, '').trim()))];
+    // Mismos delimitadores simples que usa documentGeneratorService ({variable}); el prefijo % es el de imágenes
+    const matches = clean.match(/\{[^{}]+\}/g) || [];
+    return [...new Set(matches.map((m) => m.slice(1, -1).replace(/^%/, '').trim()))];
   } catch {
     return [];
   }
 }
 
 function validateTemplateVars(buffer, fieldNames) {
-  const systemVars = ['jal_name', 'doc_type_name', 'fecha_expedicion', 'beneficiary_name', 'beneficiary_id', 'numero_radicado'];
+  const systemVars = ['jal_name', 'doc_type_name', 'fecha_expedicion', 'beneficiary_name', 'beneficiary_id', 'numero_radicado', 'nombre_encargado', 'cargo', 'firma_img'];
   const tplVars = extractDocxVariables(buffer);
   const unknown = tplVars.filter((v) => !([...fieldNames, ...systemVars].includes(v)));
   return unknown.length ? [`Variables en la plantilla sin campo definido: ${unknown.join(', ')}`] : [];
@@ -164,4 +165,4 @@ async function getTemplate(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { list, getOne, create, update, getTemplate };
+module.exports = { list, getOne, create, update, getTemplate, validateTemplateVars };

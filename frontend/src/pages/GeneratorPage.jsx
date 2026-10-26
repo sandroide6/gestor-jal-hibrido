@@ -1,15 +1,28 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useSyncStore } from '../stores/syncStore';
-import { generateDocument, getDownloadUrls, downloadDocument, cacheEdilSignature } from '../services/documentService';
+import { generateDocument, downloadDocument, cacheEdilSignature, fetchMyRecentDocuments } from '../services/documentService';
 import { triggerBlobDownload } from '../services/clientDocumentGenerator';
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useEdiles } from '../hooks/useEdiles';
+import { useAsync } from '../hooks/useAsync';
+import { formatDateTime } from '../utils/format';
 import DynamicForm from '../components/forms/DynamicForm';
 import AppLayout from '../components/ui/AppLayout';
 import EmptyState from '../components/ui/EmptyState';
 
 const STEPS = { SELECT: 'select', FORM: 'form', RESULT: 'result' };
+
+// La fecha del propio documento (expedición) arranca en hoy; las fechas de eventos
+// (citación, inicio, fin…) no se adivinan. El usuario la ve y puede cambiarla.
+export function initialFormValues(fields = []) {
+  const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en hora local
+  const values = {};
+  for (const f of fields) {
+    if (f.type === 'date' && (/expedici/i.test(f.label) || /^fecha$/i.test(f.label.trim()))) values[f.name] = today;
+  }
+  return values;
+}
 
 export default function GeneratorPage() {
   const { token, user } = useAuthStore();
@@ -39,13 +52,11 @@ export default function GeneratorPage() {
   const hasDynErrors = Object.values(dynErrors).some(Boolean);
   const canSubmit = !hasDynErrors;
 
+  // Un clic en el tipo abre directamente su formulario (antes: seleccionar + "Continuar")
   function handleSelectType(type) {
     setSelectedType(type);
-  }
-
-  function handleContinue() {
-    if (!selectedType) return;
-    setFormValues({});
+    setFormValues(initialFormValues(type.fields));
+    setResult(null);
     setError('');
     setSubmitAttempted(false);
     setDynErrors({});
@@ -99,10 +110,10 @@ export default function GeneratorPage() {
     }
   }
 
+  // Vuelve al inicio; el edil elegido se conserva (sigue visible en el formulario)
   function handleReset() {
     setStep(STEPS.SELECT);
     setSelectedType(null);
-    setSelectedEdilId('');
     setResult(null);
     setError('');
     setFormValues({});
@@ -111,6 +122,24 @@ export default function GeneratorPage() {
   }
 
   const selectedEdil = ediles.find((e) => e.id === selectedEdilId);
+
+  // Sin esta lista el auxiliar no tenía cómo volver a descargar un documento ya generado
+  const { data: recentDocs = [] } = useAsync(
+    () => (isOnline && step === STEPS.SELECT ? fetchMyRecentDocuments(token) : Promise.resolve([])),
+    [token, isOnline, step],
+  );
+
+  async function handleDownload(docId, fmt, name, offlineBlob) {
+    setDownloading(`${docId}:${fmt}`);
+    try {
+      if (offlineBlob) triggerBlobDownload(offlineBlob, name);
+      else await downloadDocument(docId, fmt, token, name);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDownloading('');
+    }
+  }
 
   // Cachear la firma del edil para uso offline
   useEffect(() => {
@@ -122,21 +151,19 @@ export default function GeneratorPage() {
     <AppLayout title="Generador de Documentos">
       {/* Breadcrumb de pasos */}
       <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-5 flex-wrap">
-        <span className={step === STEPS.SELECT ? 'text-jal-blue-500 font-semibold' : ''}>1. Selección</span>
+        <span className={step === STEPS.SELECT ? 'text-jal-blue-500 font-semibold' : ''}>1. Tipo de documento</span>
         <span>›</span>
         <span className={step === STEPS.FORM ? 'text-jal-blue-500 font-semibold' : ''}>2. Datos</span>
         <span>›</span>
-        <span className={step === STEPS.RESULT ? 'text-jal-blue-500 font-semibold' : ''}>3. Descarga</span>
+        <span className={step === STEPS.RESULT ? 'text-jal-blue-500 font-semibold' : ''}>3. Listo</span>
       </div>
 
-      {/* PASO 1 — Selección de tipo y edil */}
+      {/* PASO 1 — Tipo de documento: un clic abre el formulario */}
       {step === STEPS.SELECT && (
         <div className="space-y-8">
-
-          {/* Sección: tipo de documento */}
           <div>
             <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Selecciona el tipo de documento
+              ¿Qué documento necesitas?
             </h2>
             {loadingTypes ? (
               <p className="text-sm text-gray-400">Cargando tipos de documento…</p>
@@ -144,35 +171,20 @@ export default function GeneratorPage() {
               <EmptyState message="No hay tipos de documento configurados para esta JAL." />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
-                {docTypes.map((type) => {
-                  const isSelected = selectedType?.id === type.id;
-                  return (
-                    <button
-                      key={type.id}
-                      onClick={() => handleSelectType(type)}
-                      className={`card text-left transition-all cursor-pointer group
-                        ${isSelected
-                          ? 'border-jal-blue-500 ring-2 ring-jal-blue-200 shadow-md'
-                          : 'hover:border-jal-blue-300 hover:shadow-md'}`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className={`font-semibold text-sm ${isSelected ? 'text-jal-blue-600' : 'text-jal-blue-500 group-hover:text-jal-blue-600'}`}>
-                          {type.name}
-                        </p>
-                        {isSelected && (
-                          <span className="flex-shrink-0 w-5 h-5 bg-jal-blue-500 rounded-full flex items-center justify-center">
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                            </svg>
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-400 mt-1">
-                        {(type.fields || []).length} campo(s)
-                      </p>
-                    </button>
-                  );
-                })}
+                {docTypes.map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => handleSelectType(type)}
+                    className="card text-left transition-all cursor-pointer group hover:border-jal-blue-300 hover:shadow-md"
+                  >
+                    <p className="font-semibold text-sm text-jal-blue-500 group-hover:text-jal-blue-600">
+                      {type.name}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {(type.fields || []).length} campo(s)
+                    </p>
+                  </button>
+                ))}
               </div>
             )}
             {(typeError || error) && (
@@ -180,43 +192,37 @@ export default function GeneratorPage() {
             )}
           </div>
 
-          {/* Sección: edil (solo para auxiliar) */}
-          {isAuxiliar && ediles.length > 0 && (
+          {recentDocs.length > 0 && (
             <div>
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                Selecciona el edil
-              </h2>
-              <div className="card">
-                <label className="label" htmlFor="edil_select">
-                  Edil a nombre del cual se generará el documento
-                </label>
-                <select
-                  id="edil_select"
-                  className="input"
-                  value={selectedEdilId}
-                  onChange={(e) => setSelectedEdilId(e.target.value)}
-                >
-                  <option value="">— Sin edil asignado —</option>
-                  {ediles.map((edil) => (
-                    <option key={edil.id} value={edil.id}>
-                      {edil.name}{edil.cargo_titulo ? ` — ${edil.cargo_titulo}` : ''}
-                    </option>
-                  ))}
-                </select>
-                {selectedEdilId && (
-                  <p className="text-xs text-amber-700 mt-2">
-                    El documento se generará a nombre de <strong>{selectedEdil?.name}</strong> y se le notificará para que lo revise.
-                  </p>
-                )}
-              </div>
+              <h2 className="text-sm font-semibold text-gray-600 mb-3">Tus documentos recientes</h2>
+              <ul className="card divide-y divide-gray-100 p-0">
+                {recentDocs.map((doc) => (
+                  <li key={doc.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
+                    <div className="min-w-0">
+                      <p className="text-sm text-gray-800 truncate">
+                        {doc.doc_type_name} — {doc.beneficiary_name || 'sin nombre'}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatDateTime(doc.created_at)}{doc.numero_radicado ? ` · Radicado ${doc.numero_radicado}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      {['pdf', 'docx'].map((fmt) => (
+                        <button
+                          key={fmt}
+                          type="button"
+                          className="text-xs text-jal-blue-500 hover:underline disabled:opacity-50"
+                          disabled={!!downloading}
+                          onClick={() => handleDownload(doc.id, fmt, `${doc.doc_type_name}_${doc.beneficiary_name}.${fmt}`)}
+                        >
+                          {downloading === `${doc.id}:${fmt}` ? 'Descargando…' : `Descargar .${fmt}`}
+                        </button>
+                      ))}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             </div>
-          )}
-
-          {/* Botón continuar */}
-          {selectedType && (
-            <button onClick={handleContinue} className="btn-primary">
-              Continuar →
-            </button>
           )}
         </div>
       )}
@@ -226,7 +232,7 @@ export default function GeneratorPage() {
         <div>
           <div className="flex items-center gap-3 mb-6">
             <button onClick={handleReset} className="text-sm text-jal-blue-400 hover:underline">
-              ← Cambiar selección
+              ← Elegir otro tipo
             </button>
             <h2 className="text-lg font-semibold text-gray-800">{selectedType.name}</h2>
             {selectedEdil && (
@@ -244,6 +250,33 @@ export default function GeneratorPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {isAuxiliar && ediles.length > 0 && (
+              <div className="card">
+                <label className="label" htmlFor="edil_select">
+                  Edil a nombre del cual se generará el documento
+                </label>
+                <select
+                  id="edil_select"
+                  className="input"
+                  value={selectedEdilId}
+                  onChange={(e) => setSelectedEdilId(e.target.value)}
+                  disabled={generating}
+                >
+                  <option value="">— Sin edil asignado —</option>
+                  {ediles.map((edil) => (
+                    <option key={edil.id} value={edil.id}>
+                      {edil.name}{edil.cargo_titulo ? ` — ${edil.cargo_titulo}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {selectedEdilId && (
+                  <p className="text-xs text-amber-700 mt-2">
+                    El documento se generará a nombre de <strong>{selectedEdil?.name}</strong> y se le notificará para que lo revise.
+                  </p>
+                )}
+              </div>
+            )}
+
             {(selectedType.fields?.length ?? 0) > 0 && (
               <div className="card">
                 <h3 className="text-sm font-semibold text-gray-600 mb-4">
@@ -342,43 +375,39 @@ export default function GeneratorPage() {
                 </p>
               )}
               <div className="flex flex-wrap gap-3">
-                {['docx', 'pdf'].map((fmt) => {
-                  const hasOfflineBlob = result.offline && result.offlineBlobs?.[fmt];
-                  const hasOnline = !result.offline;
-                  if (!hasOfflineBlob && !hasOnline) return null;
+                {['pdf', 'docx'].map((fmt) => {
+                  const offlineBlob = result.offline ? result.offlineBlobs?.[fmt] : null;
+                  if (result.offline && !offlineBlob) return null;
+                  const key = `${result.id}:${fmt}`;
                   return (
                     <button
                       key={fmt}
                       disabled={!!downloading}
-                      onClick={async () => {
-                        setDownloading(fmt);
-                        try {
-                          const name = `${selectedType?.name}_${result.beneficiaryName}.${fmt}`;
-                          if (hasOfflineBlob) {
-                            triggerBlobDownload(result.offlineBlobs[fmt], name);
-                          } else {
-                            await downloadDocument(result.id, fmt, token, name);
-                          }
-                        } catch (e) {
-                          setError(e.message);
-                        } finally {
-                          setDownloading('');
-                        }
-                      }}
-                      className={fmt === 'docx' ? 'btn-primary' : 'btn-secondary'}
+                      onClick={() => handleDownload(result.id, fmt, `${selectedType?.name}_${result.beneficiaryName}.${fmt}`, offlineBlob)}
+                      className={fmt === 'pdf' ? 'btn-primary' : 'btn-secondary'}
                     >
-                      {downloading === fmt ? 'Descargando…' : `Descargar .${fmt}`}
+                      {downloading === key ? 'Descargando…' : `Descargar .${fmt}`}
                     </button>
                   );
                 })}
               </div>
+              <p className="text-xs text-gray-500 mt-3">
+                {result.offline
+                  ? 'Queda guardado en este equipo y se subirá al sistema al recuperar la conexión.'
+                  : 'Queda guardado en el sistema: puedes volver a descargarlo desde "Tus documentos recientes" en la pantalla de inicio del generador.'}
+              </p>
               {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
             </div>
           )}
 
-          <button onClick={handleReset} className="btn-secondary">
-            Generar otro documento
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button onClick={() => handleSelectType(selectedType)} className="btn-primary">
+              Otro documento de este tipo
+            </button>
+            <button onClick={handleReset} className="btn-secondary">
+              Elegir otro tipo
+            </button>
+          </div>
         </div>
       )}
     </AppLayout>

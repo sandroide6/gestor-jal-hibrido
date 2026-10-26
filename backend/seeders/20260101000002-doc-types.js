@@ -105,6 +105,8 @@ const DOC_TYPES = [
     template_path: 'plantillas/Certificado de Residencia.docx',
     fields: [
       { name: 'fecha',             label: 'Fecha de expedición',              type: 'date', required: true },
+      { name: 'Nombre',            label: 'Nombre completo',                  type: 'text', required: true },
+      { name: 'tipodeidentificacion', label: 'Tipo de documento',             type: 'select', required: true, options: ['Cédula de ciudadanía','Tarjeta de identidad','Cédula de extranjería','Pasaporte'] },
       { name: 'numerodocumento',   label: 'Número de documento',              type: 'text', required: true },
       { name: 'lugardedocumento',  label: 'Lugar de expedición del documento',type: 'text', required: true },
       { name: 'dirección',         label: 'Dirección de residencia',          type: 'text', required: true },
