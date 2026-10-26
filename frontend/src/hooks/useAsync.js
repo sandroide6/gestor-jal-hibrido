@@ -13,12 +13,13 @@ export function useAsync(asyncFn, deps = []) {
   // sobre ese `null` tumbaba la página entera (ver EdilPage/ReportsPage/AuditLogsPage).
   const [state, setState] = useState({ data: undefined, loading: true, error: '' });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const run = useCallback(() => {
     setState((s) => ({ ...s, loading: true, error: '' }));
     asyncFn()
       .then((data) => setState({ data, loading: false, error: '' }))
       .catch((err) => setState({ data: undefined, loading: false, error: err.message || 'Error desconocido' }));
+  // deps lo define quien llama al hook (patrón intencional)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   useEffect(() => { run(); }, [run]);

@@ -210,7 +210,7 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
       const parts  = String(value ?? '').trim().split(' ');
       const numVal = parts[0] && !isNaN(parseInt(parts[0], 10)) ? parts[0] : '';
       const unit   = (parts[1] === 'meses' || parts[1] === 'años') ? parts[1] : 'años';
-      function emitDuracion(n, u) { onChange(field.name, `${n} ${u}`.trim()); }
+      const emitDuracion = (n, u) => onChange(field.name, `${n} ${u}`.trim());
       return (
         <div className="flex gap-2">
           <input
@@ -246,7 +246,7 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
       const anio  = parts[0] ?? '';
       const sem   = parts[1] ?? '';
       const errCls = hasError ? ' border-red-400 ring-1 ring-red-300' : '';
-      function emitPeriodo(a, s) { onChange(field.name, `${a}-${s}`); }
+      const emitPeriodo = (a, s) => onChange(field.name, `${a}-${s}`);
       return (
         <div className="flex gap-2">
           <input
@@ -280,11 +280,11 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
     }
 
     default: { // text
-      function applyFilter(raw) {
+      const applyFilter = (raw) => {
         if (field.inputFilter === 'solo_letras')  return raw.replace(/[^a-zA-ZáéíóúÁÉÍÓÚüÜñÑ\s]/g, '');
         if (field.inputFilter === 'solo_numeros') return raw.replace(/\D/g, '');
         return raw;
-      }
+      };
       return (
         <input
           {...common}

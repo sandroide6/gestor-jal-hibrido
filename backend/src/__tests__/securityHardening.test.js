@@ -218,3 +218,31 @@ describe('runBackup() — retención en Drive', () => {
     expect(fs.readdirSync(TMP_BACKUPS_DIR).some((f) => f.startsWith('backup_jal_jal-a_'))).toBe(true);
   });
 });
+
+describe('addDocumentsToZip() — backups con la copia en BD', () => {
+  const PizZip = require('pizzip');
+  const fakeDoc = (over) => ({
+    id: 'd1', file_path_docx: '/no/existe.docx', file_path_pdf: null,
+    file_docx: Buffer.from('DOCX-BD'), file_pdf: Buffer.from('PDF-BD'),
+    ...over,
+    toJSON() { return { id: this.id, file_docx: this.file_docx, file_pdf: this.file_pdf, beneficiary_name: 'Ana' }; },
+  });
+
+  it('usa los bytes de BD cuando el archivo no está en disco y no los mete en el JSON', () => {
+    const zip = new PizZip();
+    expect(drive.addDocumentsToZip(zip, [fakeDoc()])).toBe(2);
+    expect(zip.file('archivos/d1.docx').asText()).toBe('DOCX-BD');
+    expect(zip.file('archivos/d1.pdf').asText()).toBe('PDF-BD');
+    const json = JSON.parse(zip.file('data/documentos.json').asText());
+    expect(json[0]).toEqual({ id: 'd1', beneficiary_name: 'Ana' });
+  });
+
+  it('prefiere el archivo en disco si existe', () => {
+    const p = path.join(TMP_BACKUPS_DIR, 'd2.pdf');
+    fs.writeFileSync(p, 'PDF-DISCO');
+    const zip = new PizZip();
+    drive.addDocumentsToZip(zip, [fakeDoc({ id: 'd2', file_path_pdf: p, file_docx: null })]);
+    expect(zip.file('archivos/d2.pdf').asText()).toBe('PDF-DISCO');
+    expect(zip.file('archivos/d2.docx')).toBeNull();
+  });
+});

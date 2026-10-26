@@ -4,7 +4,6 @@ const { User, AuditLog } = require('../models');
 const totpService = require('../services/totpService');
 const authService = require('../services/authService');
 const { setAuthCookies } = require('../utils/authCookies');
-const schemas     = require('../validations/twoFA');
 
 // POST /auth/2fa/setup — genera secreto y QR (no lo activa aún)
 async function setup(req, res, next) {

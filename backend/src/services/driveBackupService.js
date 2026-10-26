@@ -2,7 +2,7 @@
 const { Readable } = require('stream');
 const fs = require('fs');
 const path = require('path');
-const { Document, DocType, User, Jal, BackupLog } = require('../models');
+const { Document, DocType, Jal, BackupLog } = require('../models');
 const { decryptJSON } = require('../utils/crypto');
 const logger = require('../config/logger');
 
@@ -221,6 +221,25 @@ async function deleteDriveFiles(jalId, driveFileIds = []) {
   }
 }
 
+// Escribe data/documentos.json (sin el binario) y archivos/<id>.docx|pdf. El binario
+// sale del disco si existe y, si no, de la copia en BD (file_docx/file_pdf) — en Render
+// el disco no persiste y antes el zip quedaba sin archivos, mientras el JSON cargaba
+// los bytes serializados como arreglos de números.
+function addDocumentsToZip(zip, docs) {
+  let filesAdded = 0;
+  zip.file('data/documentos.json', JSON.stringify(docs.map((d) => {
+    const j = d.toJSON(); delete j.file_docx; delete j.file_pdf; return j;
+  }), null, 2));
+  for (const doc of docs) {
+    for (const ext of ['docx', 'pdf']) {
+      const filePath = doc[`file_path_${ext}`];
+      const bytes = filePath && fs.existsSync(filePath) ? fs.readFileSync(filePath) : doc[`file_${ext}`];
+      if (bytes) { zip.file(`archivos/${doc.id}.${ext}`, bytes); filesAdded++; }
+    }
+  }
+  return filesAdded;
+}
+
 async function buildBackupBuffer(jalId) {
   const [docs, docTypes] = await Promise.all([
     Document.findAll({ where: { jal_id: jalId } }),
@@ -229,7 +248,6 @@ async function buildBackupBuffer(jalId) {
 
   const PizZip = getPizZip();
   const zip = new PizZip();
-  const storagePath = process.env.STORAGE_PATH || path.join(__dirname, '../../data/output');
   const templatesPath = process.env.TEMPLATES_PATH || path.join(__dirname, '../../plantillas');
 
   zip.file('manifest.json', JSON.stringify({
@@ -238,19 +256,10 @@ async function buildBackupBuffer(jalId) {
     counts: { documents: docs.length, docTypes: docTypes.length },
   }, null, 2));
 
-  zip.file('data/documentos.json', JSON.stringify(docs.map(d => d.toJSON()), null, 2));
+  addDocumentsToZip(zip, docs);
   zip.file('data/tipos_documento.json', JSON.stringify(docTypes.map(d => {
     const t = d.toJSON(); delete t.template_data; return t;
   }), null, 2));
-
-  // Archivos de documentos
-  for (const doc of docs) {
-    const id = doc.id;
-    if (doc.file_path_docx && fs.existsSync(doc.file_path_docx))
-      zip.file(`archivos/${id}.docx`, fs.readFileSync(doc.file_path_docx));
-    if (doc.file_path_pdf && fs.existsSync(doc.file_path_pdf))
-      zip.file(`archivos/${id}.pdf`, fs.readFileSync(doc.file_path_pdf));
-  }
 
   // Plantillas
   for (const dt of docTypes) {
@@ -479,4 +488,4 @@ async function checkAutoBackups() {
   }
 }
 
-module.exports = { getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, isLocalBackupOf, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };
+module.exports = { addDocumentsToZip, getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, isLocalBackupOf, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };
