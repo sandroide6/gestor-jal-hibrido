@@ -246,3 +246,19 @@ describe('addDocumentsToZip() — backups con la copia en BD', () => {
     expect(zip.file('archivos/d2.docx')).toBeNull();
   });
 });
+
+describe('addDocTypesToZip() — plantillas en el backup', () => {
+  const PizZip = require('pizzip');
+
+  it('incluye la plantilla guardada solo en BD y no la duplica en el JSON', () => {
+    const dt = {
+      name: 'Certificado de Residencia', template_path: null,
+      template_data: `data:application/octet-stream;base64,${Buffer.from('DOCX-TPL').toString('base64')}`,
+      toJSON() { return { name: this.name, template_data: this.template_data }; },
+    };
+    const zip = new PizZip();
+    drive.addDocTypesToZip(zip, [dt]);
+    expect(zip.file('plantillas/Certificado_de_Residencia.docx').asText()).toBe('DOCX-TPL');
+    expect(JSON.parse(zip.file('data/tipos_documento.json').asText())).toEqual([{ name: 'Certificado de Residencia' }]);
+  });
+});

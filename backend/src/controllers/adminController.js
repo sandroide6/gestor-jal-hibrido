@@ -1,7 +1,6 @@
 'use strict';
 const { getIp } = require('../utils/request');
 const fs = require('fs');
-const path = require('path');
 const { Op } = require('sequelize');
 // pizzip/exceljs son pesados de requerir y este controlador se importa siempre al
 // arrancar (vía las rutas). Diferirlos hasta el primer uso real recorta el tiempo hasta
@@ -13,7 +12,7 @@ function getExcelJS() {
   return require('exceljs');
 }
 const { Document, DocType, User, AuditLog } = require('../models');
-const { addDocumentsToZip } = require('../services/driveBackupService');
+const { addDocumentsToZip, addDocTypesToZip } = require('../services/driveBackupService');
 const audit = require('../services/auditService');
 
 
@@ -85,7 +84,7 @@ async function backup(req, res, next) {
       counts: { documents: docs.length, docTypes: docTypes.length, users: users.length },
     }, null, 2));
 
-    zip.file('data/tipos_documento.json', JSON.stringify(docTypes.map(d => d.toJSON()), null, 2));
+    addDocTypesToZip(zip, docTypes);
     zip.file('data/usuarios.json', JSON.stringify(
       users.map(u => {
         const j = u.toJSON();
@@ -98,14 +97,6 @@ async function backup(req, res, next) {
     // ── Documentos (JSON + archivos) ─────────────────────────
     const filesAdded = addDocumentsToZip(zip, docs);
 
-    // ── Plantillas de tipos de documento ─────────────────────
-    for (const dt of docTypes) {
-      if (dt.template_path && fs.existsSync(dt.template_path)) {
-        const ext = path.extname(dt.template_path);
-        const safeDtName = dt.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-        zip.file(`plantillas/${safeDtName}${ext}`, fs.readFileSync(dt.template_path));
-      }
-    }
 
     // ── Excel con metadatos ───────────────────────────────────
     const xlsxBuffer = await buildExcelReport(docs);

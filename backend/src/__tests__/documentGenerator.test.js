@@ -205,3 +205,25 @@ describe('formatDateFields', () => {
     expect(formatDateFields(fields, { fecha: '3 de mayo' })).toEqual({ fecha: '3 de mayo' });
   });
 });
+
+describe('generateDocxFromTemplate con firma', () => {
+  // Cubre el módulo de imágenes, que ahora corre sobre @xmldom/xmldom (override en package.json)
+  it('inserta la firma como imagen en una plantilla real', async () => {
+    const PizZip = require('pizzip');
+    const { generateDocxFromTemplate } = require('../services/documentGeneratorService');
+    const tpl = fs.readFileSync(path.join(__dirname, '..', '..', 'plantillas', 'Comunicado Oficial.docx'));
+    const png = Buffer.from(
+      '89504e470d0a1a0a0000000d494844520000000100000001080200000090' +
+      '7753de0000000c4944415408d763f8cfffff00000005000127e553470000' +
+      '0000049454e44ae426082', 'hex'
+    );
+    const out = await generateDocxFromTemplate({
+      templateData: tpl.toString('base64'),
+      data: { fecha: '26 de octubre de 2026', destinatario: 'A', asunto: 'B', contenido: 'C', nombre_encargado: 'Edil', cargo: 'Edil(a)' },
+      signatureBuffer: png,
+    });
+    const zip = new PizZip(out);
+    expect(Object.keys(zip.files).some((f) => /^word\/media\/.+\.png$/.test(f))).toBe(true);
+    expect(zip.file('word/document.xml').asText()).toContain('<w:drawing>');
+  });
+});

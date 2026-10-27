@@ -7,6 +7,13 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 
 ## [Sin publicar] — 2026-10-27
 
+### Seguridad
+- Backend sin vulnerabilidades en producción (`npm audit --omit=dev`): `xmldom` del módulo de imágenes reemplazado por `@xmldom/xmldom` 0.8 vía `overrides` y `uuid` 11 (también para sequelize y exceljs)
+- Frontend: React Router 7 (`react-router-dom@7.18`), sin vulnerabilidades en producción
+
+### Corregido
+- Los backups (descarga del admin y Drive) incluyen las plantillas subidas desde el panel, que solo están en la BD. El armado de tipos y plantillas queda en un único `addDocTypesToZip`
+
 ### Agregado
 - **Buscar a la persona por cédula**: al escribir un número ya atendido en la JAL, el formulario ofrece «Usar sus datos» y llena nombre, tipo y lugar de expedición del documento (solo campos vacíos). `GET /v1/documents/person?cedula=`, limitado a la JAL del usuario, solo datos de identidad y con registro en auditoría (`document.person_lookup`)
 

@@ -240,6 +240,23 @@ function addDocumentsToZip(zip, docs) {
   return filesAdded;
 }
 
+// Tipos de documento + su plantilla, del disco o de la copia en BD (template_data):
+// las plantillas subidas desde el panel solo viven en la BD y antes no entraban al zip.
+function addDocTypesToZip(zip, docTypes) {
+  zip.file('data/tipos_documento.json', JSON.stringify(docTypes.map((d) => {
+    const t = d.toJSON(); delete t.template_data; return t;
+  }), null, 2));
+  for (const dt of docTypes) {
+    const safe = dt.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (dt.template_path && fs.existsSync(dt.template_path)) {
+      zip.file(`plantillas/${safe}${path.extname(dt.template_path)}`, fs.readFileSync(dt.template_path));
+    } else if (dt.template_data) {
+      const b64 = dt.template_data.includes(',') ? dt.template_data.split(',')[1] : dt.template_data;
+      zip.file(`plantillas/${safe}.docx`, Buffer.from(b64, 'base64'));
+    }
+  }
+}
+
 async function buildBackupBuffer(jalId) {
   const [docs, docTypes] = await Promise.all([
     Document.findAll({ where: { jal_id: jalId } }),
@@ -257,18 +274,7 @@ async function buildBackupBuffer(jalId) {
   }, null, 2));
 
   addDocumentsToZip(zip, docs);
-  zip.file('data/tipos_documento.json', JSON.stringify(docTypes.map(d => {
-    const t = d.toJSON(); delete t.template_data; return t;
-  }), null, 2));
-
-  // Plantillas
-  for (const dt of docTypes) {
-    if (dt.template_path && fs.existsSync(dt.template_path)) {
-      const ext  = path.extname(dt.template_path);
-      const safe = dt.name.replace(/[^a-zA-Z0-9_-]/g, '_');
-      zip.file(`plantillas/${safe}${ext}`, fs.readFileSync(dt.template_path));
-    }
-  }
+  addDocTypesToZip(zip, docTypes);
 
   // Plantillas globales (carpeta plantillas/)
   if (fs.existsSync(templatesPath)) {
@@ -488,4 +494,4 @@ async function checkAutoBackups() {
   }
 }
 
-module.exports = { addDocumentsToZip, getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, isLocalBackupOf, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };
+module.exports = { addDocumentsToZip, addDocTypesToZip, getAuthUrl, exchangeCode, getUserEmail, runBackup, checkAutoBackups, calcNextBackup, listLocalBackups, isLocalBackupOf, getLocalBackupsPath, decryptTokens, uploadGeneratedDocument, deleteDriveFiles };
