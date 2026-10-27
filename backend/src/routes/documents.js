@@ -131,6 +131,8 @@ router.use(authenticate);
 // ── Auxiliar ──────────────────────────────────────────────
 // Lista propia + genera documento
 router.get('/my', validate(documentsSchemas.ownList, 'query'), documentController.list);
+// Datos de identidad de alguien ya atendido, para no volver a escribirlos
+router.get('/person', validate(documentsSchemas.personLookup, 'query'), documentController.findPerson);
 router.post('/', upload.single('firma'), validate(documentsSchemas.create), documentController.create);
 
 // ── Edil / Admin ──────────────────────────────────────────

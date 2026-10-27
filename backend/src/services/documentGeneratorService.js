@@ -484,6 +484,19 @@ async function docxBufferToPdfFallback(docxBuffer) {
 
 // ─── Función principal ────────────────────────────────────
 
+// Los campos tipo fecha llegan como AAAA-MM-DD; en el documento salen como "26 de octubre de 2026"
+function formatDateFields(fields, data) {
+  const out = { ...data };
+  for (const f of fields || []) {
+    if (f.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(out[f.name] ?? '')) {
+      out[f.name] = new Date(`${out[f.name]}T00:00:00Z`).toLocaleDateString('es-CO', {
+        day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+      });
+    }
+  }
+  return out;
+}
+
 async function generateDocuments({
   jalId,
   jalName,
@@ -493,6 +506,7 @@ async function generateDocuments({
   signatureBuffer = null,
   signatureMime = null,
 }) {
+  data = formatDateFields(docType.fields, data);
   const outDir = buildOutputDir(jalId, docType.name, data.beneficiary_id || 'sin_cedula');
   const { docx: docxName, pdf: pdfName } = buildFilename(docType.name, data.beneficiary_id || 'doc');
 
@@ -542,4 +556,4 @@ async function generateDocuments({
   return { docxPath, pdfPath, docxName, pdfName, docxBuffer, pdfBuffer };
 }
 
-module.exports = { generateDocuments };
+module.exports = { generateDocuments, formatDateFields };

@@ -5,6 +5,7 @@ import {
   cacheTemplate, getCachedTemplate, cacheUserData, getCachedUserData,
 } from '../db/index';
 import { useSyncStore } from '../stores/syncStore';
+import { formatDateFields } from '../utils/format';
 
 // true cuando el error es de red (sin respuesta HTTP del servidor)
 function isNetworkError(err) {
@@ -158,7 +159,7 @@ export async function generateDocument({ docType, formData, beneficiaryName, ben
   const templateData = {
     beneficiary_name: beneficiaryName,
     beneficiary_id: beneficiaryId,
-    ...formData,
+    ...formatDateFields(docType.fields, formData),
     jal_name: jalName,
     doc_type_name: docType.name,
     fecha_expedicion: today,
@@ -226,6 +227,12 @@ export async function downloadDocument(docId, format, token, filename) {
 // Documentos creados por el usuario actual (más recientes primero)
 export async function fetchMyDocuments(limit, token) {
   return api.get(`/documents/my?limit=${limit}`, { token });
+}
+
+// Nombre, tipo y lugar del documento de alguien ya atendido en esta JAL (o null)
+export async function findPerson(cedula, token) {
+  const { person } = await api.get(`/documents/person?cedula=${encodeURIComponent(cedula)}`, { token });
+  return person;
 }
 
 export async function deleteDocument(docId, token) {

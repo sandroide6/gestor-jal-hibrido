@@ -370,3 +370,29 @@ describe('DELETE /v1/documents/:id', () => {
     expect(res.body).toEqual({ id: VALID_DOC_ID, deleted: true });
   });
 });
+
+describe('GET /v1/documents/person — buscar persona por cédula', () => {
+  it('400 sin cédula o con caracteres no válidos', async () => {
+    mockOfflineDb();
+    const res = await request(app)
+      .get('/v1/documents/person?cedula=%27%3B--')
+      .set('Authorization', `Bearer ${auxiliarToken()}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('200, busca solo en la JAL del token y deja auditoría', async () => {
+    mockOfflineDb();
+    const person = { nombre: 'Ana Ríos', tipo_documento: 'Cédula de ciudadanía', lugar_documento: 'Medellín' };
+    vi.spyOn(docService, 'findPersonByDocumentId').mockResolvedValue(person);
+    vi.spyOn(audit, 'log').mockResolvedValue();
+
+    const res = await request(app)
+      .get('/v1/documents/person?cedula=1234567')
+      .set('Authorization', `Bearer ${auxiliarToken()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ person });
+    expect(docService.findPersonByDocumentId).toHaveBeenCalledWith('jal-1', '1234567');
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({ action: 'document.person_lookup', userId: 'aux-1' }));
+  });
+});

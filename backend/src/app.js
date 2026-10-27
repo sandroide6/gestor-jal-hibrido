@@ -28,7 +28,9 @@ const { register, metricsMiddleware } = require('./config/metrics');
 
 const app = express();
 
-app.set('trust proxy', 1);
+// Vercel → proxy de Render son 2 saltos en producción; con 1, req.ip sería la IP de Vercel
+// y todos compartirían el contador de rate limit. Ajustable sin redeploy de código.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS) || 1);
 app.use(requestId);
 app.use(metricsMiddleware);
 
@@ -93,7 +95,7 @@ app.use(sanitize);
 if (process.env.NODE_ENV !== 'test') {
   morgan.token('req-id', (req) => req.id);
   const morganFmt = process.env.NODE_ENV === 'production'
-    ? ':req-id :method :url :status :res[content-length] - :response-time ms'
+    ? ':req-id :remote-addr :method :url :status :res[content-length] - :response-time ms'
     : ':req-id :method :url :status :response-time ms';
   app.use(morgan(morganFmt));
 }

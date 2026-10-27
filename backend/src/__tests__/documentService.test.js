@@ -327,3 +327,23 @@ describe('createDocument — PT-09', () => {
     expect(audit.log).not.toHaveBeenCalled();
   });
 });
+
+describe('findPersonByDocumentId', () => {
+  const { findPersonByDocumentId } = require('../services/documentService');
+  afterEach(() => vi.restoreAllMocks());
+
+  it('devuelve solo nombre, tipo y lugar del documento más reciente de la JAL', async () => {
+    const spy = vi.spyOn(models.Document, 'findOne').mockResolvedValue({
+      beneficiary_name: 'Ana Ríos',
+      metadata: { tipodeidentificacion: 'Cédula de ciudadanía', lugardedocumento: 'Medellín', direccion: 'Cra 1', telefono: '300' },
+    });
+    const person = await findPersonByDocumentId('jal-1', '123');
+    expect(person).toEqual({ nombre: 'Ana Ríos', tipo_documento: 'Cédula de ciudadanía', lugar_documento: 'Medellín' });
+    expect(spy.mock.calls[0][0].where).toEqual({ jal_id: 'jal-1', beneficiary_id: '123' });
+  });
+
+  it('null si no hay documentos con esa cédula', async () => {
+    vi.spyOn(models.Document, 'findOne').mockResolvedValue(null);
+    expect(await findPersonByDocumentId('jal-1', '123')).toBeNull();
+  });
+});

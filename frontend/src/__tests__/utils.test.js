@@ -1,5 +1,5 @@
 // PT-16: Utilidades — formatDate, formatDateTime, formatDateLong
-import { formatDate, formatDateTime, formatDateLong } from '../utils/format';
+import { formatDate, formatDateTime, formatDateLong, formatDateFields } from '../utils/format';
 
 describe('formatDate', () => {
   it('formatea una fecha ISO válida', () => {
@@ -49,5 +49,13 @@ describe('formatDateLong', () => {
 
   it('devuelve "—" para undefined', () => {
     expect(formatDateLong(undefined)).toBe('—');
+  });
+});
+
+describe('formatDateFields', () => {
+  it('pasa solo los campos tipo fecha a formato largo, sin correrse un día', () => {
+    const fields = [{ name: 'fecha', type: 'date' }, { name: 'otro', type: 'text' }];
+    expect(formatDateFields(fields, { fecha: '2026-10-26', otro: '2026-10-26' }))
+      .toEqual({ fecha: '26 de octubre de 2026', otro: '2026-10-26' });
   });
 });

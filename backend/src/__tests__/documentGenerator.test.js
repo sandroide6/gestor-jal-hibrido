@@ -188,3 +188,20 @@ describe('generateDocuments — PT-01: Generación de documentos', () => {
       .rejects.toMatchObject({ status: 422, message: expect.stringContaining('tipodeidentificacion') });
   });
 });
+
+describe('formatDateFields', () => {
+  const { formatDateFields } = require('../services/documentGeneratorService');
+
+  it('pasa los campos tipo fecha a formato largo sin correrse un día', () => {
+    const fields = [{ name: 'fecha', type: 'date' }, { name: 'nombre', type: 'text' }];
+    const data = { fecha: '2026-10-26', nombre: '2026-10-26' };
+    expect(formatDateFields(fields, data)).toEqual({ fecha: '26 de octubre de 2026', nombre: '2026-10-26' });
+    expect(data.fecha).toBe('2026-10-26'); // no muta lo que se guarda en metadata
+  });
+
+  it('deja intactos valores vacíos o ya formateados', () => {
+    const fields = [{ name: 'fecha', type: 'date' }];
+    expect(formatDateFields(fields, { fecha: '' })).toEqual({ fecha: '' });
+    expect(formatDateFields(fields, { fecha: '3 de mayo' })).toEqual({ fecha: '3 de mayo' });
+  });
+});

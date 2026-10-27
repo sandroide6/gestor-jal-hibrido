@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import GeneratorPage from '../pages/GeneratorPage';
 
-const { generateMock } = vi.hoisted(() => ({ generateMock: vi.fn() }));
+const { generateMock, findPersonMock } = vi.hoisted(() => ({ generateMock: vi.fn(), findPersonMock: vi.fn() }));
 
 const CERT = {
   id: 't1',
@@ -14,6 +14,8 @@ const CERT = {
     { name: 'fecha', label: 'Fecha de expedición', type: 'date', required: true },
     { name: 'nombre_completo', label: 'Nombre completo', type: 'text', required: true },
     { name: 'fecha_cita', label: 'Fecha de la citación', type: 'date', required: false },
+    { name: 'cedula', label: 'Número de cédula', type: 'text', required: false },
+    { name: 'tipodeidentificacion', label: 'Tipo de documento', type: 'text', required: false },
   ],
 };
 
@@ -27,6 +29,7 @@ vi.mock('../services/documentService', () => ({
   generateDocument: generateMock,
   downloadDocument: vi.fn(),
   cacheEdilSignature: vi.fn(),
+  findPerson: findPersonMock,
 }));
 
 function renderPage() {
@@ -38,7 +41,7 @@ function renderPage() {
 }
 
 describe('GeneratorPage', () => {
-  beforeEach(() => { generateMock.mockReset(); window.scrollTo = vi.fn(); });
+  beforeEach(() => { generateMock.mockReset(); findPersonMock.mockReset().mockResolvedValue(null); window.scrollTo = vi.fn(); });
 
   it('abre el formulario desde ?tipo= con la fecha de expedición en hoy y la otra fecha vacía', async () => {
     renderPage();
@@ -77,5 +80,19 @@ describe('GeneratorPage', () => {
     await user.click(await screen.findByRole('button', { name: 'Revisar antes de crear' }));
     expect(screen.getByText(/Falta completar o corregir/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sí, crear el documento' })).not.toBeInTheDocument();
+  });
+
+  it('ofrece los datos de una persona ya atendida y solo llena los campos vacíos', async () => {
+    const user = userEvent.setup();
+    findPersonMock.mockResolvedValue({ nombre: 'Ana Ríos', tipo_documento: 'Cédula de ciudadanía', lugar_documento: '' });
+    renderPage();
+
+    await user.type(await screen.findByLabelText(/Número de cédula/), '1234567');
+    await user.click(await screen.findByRole('button', { name: 'Usar sus datos' }, { timeout: 2000 }));
+
+    expect(findPersonMock).toHaveBeenLastCalledWith('1234567', 'tk');
+    expect(screen.getByLabelText(/Nombre completo/)).toHaveValue('Ana Ríos');
+    expect(screen.getByLabelText(/Tipo de documento/)).toHaveValue('Cédula de ciudadanía');
+    expect(screen.queryByRole('button', { name: 'Usar sus datos' })).not.toBeInTheDocument();
   });
 });
