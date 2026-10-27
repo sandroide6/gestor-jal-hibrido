@@ -171,16 +171,9 @@ psql "$SUPA_URL"   -t -c "SELECT 'users', count(*) FROM users UNION ALL SELECT '
    "checks":{"db":{"status":"ok"}}}`.
 
 > **Free tier de Render**: el servicio duerme tras ~15 min sin tráfico — la
-> primera petición después tarda ~30-50s. Para evitarlo:
+> primera petición después tarda ~30-50s. El frontend lo maneja así:
 >
-> - `.github/workflows/keep-alive.yml` llama a `/health` cada ~10 min para que
->   no se duerma (y de paso mantiene activa la BD de Supabase). Como respaldo,
->   se puede crear un monitor HTTP gratis en https://uptimerobot.com apuntando
->   a `https://gestor-jal-backend.onrender.com/health` cada 5 min.
-> - El plan gratis da 750 horas/mes por cuenta: alcanza para UN servicio
->   despierto todo el mes (~744 h), pero no para dos. Si se necesita más, el
->   plan Starter de Render (de pago) no se duerme nunca.
-> - Si aun así el backend está dormido, el login espera y reintenta solo hasta
+> - El login espera y reintenta solo hasta
 >   ~90s mostrando "El servidor se está despertando…", y el banner
 >   (`ServerStatusBanner.jsx`) hace polling cada 5s a `/health` y se quita solo
 >   cuando el backend despierta — no hace falta recargar la página.

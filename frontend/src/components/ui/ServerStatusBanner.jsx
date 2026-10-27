@@ -51,7 +51,19 @@ export default function ServerStatusBanner() {
   if (backendStatus === 'ok' || !isOnline) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white text-center text-sm py-1.5 px-4 font-medium">
+    // "Despertando" es una espera normal, no un error: azul con spinner en vez de rojo.
+    <div
+      role="status"
+      className={`fixed top-0 left-0 right-0 z-50 text-white text-center text-sm py-1.5 px-4 font-medium flex items-center justify-center gap-2 ${
+        backendStatus === 'unreachable' ? 'bg-jal-blue-600' : 'bg-red-600'
+      }`}
+    >
+      {backendStatus === 'unreachable' && (
+        <svg className="animate-spin h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+        </svg>
+      )}
       {MESSAGES[backendStatus]}
     </div>
   );
