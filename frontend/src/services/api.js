@@ -9,6 +9,14 @@ function reportServerStatus(status) {
   useServerStatusStore.getState().setBackendStatus(status);
 }
 
+// 502/504 los devuelve el proxy de Vercel (rewrite /v1/* → Render) cuando Render tarda
+// demasiado en despertar — el backend no respondió, así que cuenta como "unreachable",
+// no como "ok".
+export function statusFromResponse(httpStatus) {
+  if (httpStatus === 502 || httpStatus === 504) return 'unreachable';
+  return httpStatus === 503 ? 'degraded' : 'ok';
+}
+
 // Evita bucles infinitos: solo intentamos refresh una vez por petición
 let _refreshing = null;
 
@@ -70,7 +78,7 @@ async function request(path, options = {}) {
     reportServerStatus('unreachable');
     throw networkErr;
   }
-  reportServerStatus(res.status === 503 ? 'degraded' : 'ok');
+  reportServerStatus(statusFromResponse(res.status));
 
   // Access token expirado: intentar refresh (renueva la cookie) y reintentar una vez
   // No aplicar en rutas de auth (login, refresh, 2fa) para evitar bucles
@@ -111,7 +119,7 @@ async function requestBlob(path, options = {}) {
     reportServerStatus('unreachable');
     throw networkErr;
   }
-  reportServerStatus(res.status === 503 ? 'degraded' : 'ok');
+  reportServerStatus(statusFromResponse(res.status));
 
   if (res.status === 401 && !_retry) {
     const refreshed = await tryRefresh();

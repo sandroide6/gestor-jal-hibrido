@@ -129,6 +129,52 @@ describe('LoginPage — manejo de errores', () => {
   });
 });
 
+describe('LoginPage — servidor despertando (cold start de Render)', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('reintenta solo mientras el servidor despierta y luego entra', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    loginMock
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(Object.assign(new Error('Gateway Timeout'), { status: 504 }))
+      .mockResolvedValue({ role: 'auxiliar', consent_accepted_at: '2026-01-01' });
+
+    renderPage();
+    await fillAndSubmit(user);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('El servidor se está despertando');
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/inicio', { replace: true }));
+    expect(loginMock).toHaveBeenCalledTimes(3);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('se rinde tras el tiempo máximo y muestra un mensaje claro', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    loginMock.mockRejectedValue(Object.assign(new Error('Bad Gateway'), { status: 502 }));
+
+    renderPage();
+    await fillAndSubmit(user);
+    await vi.advanceTimersByTimeAsync(100_000);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('El servidor no terminó de despertar');
+  });
+
+  it('no reintenta errores de credenciales', async () => {
+    const user = userEvent.setup();
+    loginMock.mockRejectedValue(Object.assign(new Error('Unauthorized'), { status: 401 }));
+
+    renderPage();
+    await fillAndSubmit(user);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Correo o contraseña incorrectos');
+    expect(loginMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('LoginPage — flujo 2FA', () => {
   it('cambia al paso de verificación en dos pasos cuando el login lo requiere', async () => {
     const user = userEvent.setup();

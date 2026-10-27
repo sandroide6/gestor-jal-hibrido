@@ -171,10 +171,12 @@ psql "$SUPA_URL"   -t -c "SELECT 'users', count(*) FROM users UNION ALL SELECT '
    "checks":{"db":{"status":"ok"}}}`.
 
 > **Free tier de Render**: el servicio duerme tras ~15 min sin tráfico — la
-> primera petición después tarda ~30-50s. El banner "No se pudo contactar al
-> servidor — reintentando…" en el frontend (`ServerStatusBanner.jsx`) hace
-> polling real cada 5s a `/health` y se quita solo cuando el backend
-> despierta — no hace falta recargar la página.
+> primera petición después tarda ~30-50s. El frontend lo maneja así:
+>
+> - El login espera y reintenta solo hasta
+>   ~90s mostrando "El servidor se está despertando…", y el banner
+>   (`ServerStatusBanner.jsx`) hace polling cada 5s a `/health` y se quita solo
+>   cuando el backend despierta — no hace falta recargar la página.
 >
 > **Incidentes de plataforma**: Render depende de proveedores upstream (ej.
 > Google Cloud) — hubo un incidente real que deshabilitó builds/deploys y
