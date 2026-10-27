@@ -556,4 +556,4 @@ async function generateDocuments({
   return { docxPath, pdfPath, docxName, pdfName, docxBuffer, pdfBuffer };
 }
 
-module.exports = { generateDocuments, formatDateFields };
+module.exports = { generateDocuments, generateDocxFromTemplate, formatDateFields };
