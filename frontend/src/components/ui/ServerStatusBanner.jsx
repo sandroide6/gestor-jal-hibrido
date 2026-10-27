@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { useServerStatusStore } from '../../stores/serverStatusStore';
 import { useSyncStore } from '../../stores/syncStore';
+import { statusFromResponse } from '../../services/api';
 
 const MESSAGES = {
   degraded: 'Base de datos no disponible en este momento — algunas funciones no funcionarán hasta que se restablezca.',
@@ -32,7 +33,7 @@ export default function ServerStatusBanner() {
       if (cancelled) return;
       try {
         const res = await fetch(`${base}/health`, { credentials: 'include' });
-        if (!cancelled) setBackendStatus(res.status === 503 ? 'degraded' : 'ok');
+        if (!cancelled) setBackendStatus(statusFromResponse(res.status));
       } catch {
         // sigue 'unreachable' — el próximo intento lo confirma
       }

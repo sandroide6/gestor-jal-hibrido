@@ -1,11 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../services/api';
 
+// En el plan gratis de Render el backend se duerme tras ~15 min sin uso y tarda
+// ~30-60s en despertar. Mientras tanto el login falla por red o con 502/503/504
+// (el proxy de Vercel se cansa de esperar). En vez de mostrar un error, reintentamos
+// solos durante un rato y le explicamos al usuario qué está pasando.
+const WAKE_RETRY_MS = 5000;
+const WAKE_MAX_MS   = 90_000;
+const SLOW_HINT_MS  = 4000;
 
+function isWakingError(err) {
+  return !err?.status || [502, 503, 504].includes(err.status);
+}
+
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 
 export default function LoginPage() {
   const {
@@ -21,13 +33,39 @@ export default function LoginPage() {
   const [totpError, setTotpError] = useState('');
   const [totpLoading, setTotpLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [waking, setWaking]       = useState(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const { login } = useAuthStore();
   const navigate  = useNavigate();
 
+  // Intenta el login; si el servidor está despertando, reintenta cada WAKE_RETRY_MS
+  // hasta WAKE_MAX_MS. Cualquier otro error (401, 423, 500…) se lanza enseguida.
+  async function loginWaitingForServer(email, password) {
+    const deadline = Date.now() + WAKE_MAX_MS;
+    const slowTimer = setTimeout(() => { if (mountedRef.current) setWaking(true); }, SLOW_HINT_MS);
+    try {
+      for (;;) {
+        try {
+          return await login(email, password, rememberMe);
+        } catch (err) {
+          const canRetry = isWakingError(err) && navigator.onLine && Date.now() < deadline && mountedRef.current;
+          if (!canRetry) throw err;
+          setWaking(true);
+          await sleep(WAKE_RETRY_MS);
+        }
+      }
+    } finally {
+      clearTimeout(slowTimer);
+      if (mountedRef.current) setWaking(false);
+    }
+  }
+
   async function onPasswordSubmit({ email, password }) {
     try {
-      const result = await login(email, password, rememberMe);
+      const result = await loginWaitingForServer(email, password);
       if (result?.requires2fa) {
         setTempToken(result.tempToken);
         setStep('2fa');
@@ -42,6 +80,7 @@ export default function LoginPage() {
       const msg = err.status === 423                       ? err.message
                 : err.status === 401 || err.status === 400 ? 'Correo o contraseña incorrectos'
                 : !navigator.onLine                        ? 'Sin conexión. No es posible iniciar sesión en modo offline.'
+                : isWakingError(err)                       ? 'El servidor no terminó de despertar. Espera un momento e intenta de nuevo.'
                 :                                            'Error al conectar con el servidor. Intente de nuevo.';
       setError('root', { message: msg });
     }
@@ -114,13 +153,21 @@ export default function LoginPage() {
                   Recordarme en este dispositivo
                 </label>
               </div>
+              {waking && (
+                <div role="status" className="text-sm text-jal-blue-700 bg-jal-blue-50 border border-jal-blue-200 rounded-lg px-3 py-2">
+                  El servidor se está despertando después de un rato sin uso. Puede tardar hasta un minuto;
+                  seguimos intentando solos, no cierres la página.
+                </div>
+              )}
               {errors.root && (
                 <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                   {errors.root.message}
                 </div>
               )}
               <button type="submit" className="btn-primary w-full mt-2" disabled={isSubmitting}>
-                {isSubmitting ? <Spinner text="Verificando…" /> : 'Iniciar sesión'}
+                {isSubmitting
+                  ? <Spinner text={waking ? 'Despertando el servidor…' : 'Verificando…'} />
+                  : 'Iniciar sesión'}
               </button>
             </form>
           ) : (
