@@ -5,6 +5,15 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 
 ---
 
+## [Sin publicar] — 2026-10-27
+
+### Agregado
+- **Buscar a la persona por cédula**: al escribir un número ya atendido en la JAL, el formulario ofrece «Usar sus datos» y llena nombre, tipo y lugar de expedición del documento (solo campos vacíos). `GET /v1/documents/person?cedula=`, limitado a la JAL del usuario, solo datos de identidad y con registro en auditoría (`document.person_lookup`)
+
+### Cambiado
+- Las fechas del formulario salen en formato largo en el documento («26 de octubre de 2026»), también en la generación sin conexión. En la BD se siguen guardando como AAAA-MM-DD
+- `trust proxy` configurable con `TRUST_PROXY_HOPS` (por defecto 1) y el log de peticiones en producción incluye la IP del cliente, para verificar el límite de intentos de login detrás de Vercel → Render
+
 ## [Sin publicar] — 2026-10-26
 
 ### Seguridad

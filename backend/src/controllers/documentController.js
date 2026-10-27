@@ -116,6 +116,23 @@ async function list(req, res, next) {
   }
 }
 
+async function findPerson(req, res, next) {
+  try {
+    const person = await docService.findPersonByDocumentId(req.user.jal_id, req.query.cedula);
+    await audit.log({
+      userId: req.user.sub,
+      action: 'document.person_lookup',
+      resource: 'documents/person',
+      result: 'success',
+      ip: getIp(req),
+      metadata: { beneficiary_id: req.query.cedula, found: !!person },
+    });
+    res.json({ person });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function listForEdil(req, res, next) {
   try {
     const result = await docService.listDocumentsForEdil(req.user.jal_id, req.query);
@@ -196,4 +213,4 @@ async function remove(req, res, next) {
   }
 }
 
-module.exports = { create, download, list, listForEdil, getById, markReviewed, pendingReviewCount, remove };
+module.exports = { create, download, list, findPerson, listForEdil, getById, markReviewed, pendingReviewCount, remove };

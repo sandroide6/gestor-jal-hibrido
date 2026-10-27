@@ -28,4 +28,8 @@ const edilList = Joi.object({
   limit:         Joi.number().integer().min(1).max(100).default(50),
 });
 
-module.exports = { create, ownList, edilList };
+const personLookup = Joi.object({
+  cedula: Joi.string().trim().pattern(/^[A-Za-z0-9.-]{3,20}$/).required(),
+});
+
+module.exports = { create, ownList, edilList, personLookup };

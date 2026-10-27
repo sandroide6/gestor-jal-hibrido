@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useSyncStore } from '../stores/syncStore';
-import { generateDocument, downloadDocument, cacheEdilSignature } from '../services/documentService';
+import { generateDocument, downloadDocument, cacheEdilSignature, findPerson } from '../services/documentService';
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useEdiles } from '../hooks/useEdiles';
 import DynamicForm from '../components/forms/DynamicForm';
@@ -14,6 +14,25 @@ const STEPS = { SELECT: 'select', FORM: 'form', RESULT: 'result' };
 // La fecha de expedición casi siempre es hoy; otras fechas (p. ej. de una citación) se dejan vacías.
 const isIssueDate = (f) => f.type === 'date' && /expedici|^fecha$/i.test(f.label ?? '');
 const todayISO = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD en hora local
+
+const ID_FIELD = /^(cedula|numerodocumento|numero_documento)$/i;
+// Campos de identidad que se pueden traer de un documento anterior de la misma persona
+const PERSON_FIELDS = {
+  nombre:          /^(nombre|nombre_completo|nombre_titular)$/i,
+  tipo_documento:  /^(tipodeidentificacion|tipodocumento|tipo_documento)$/i,
+  lugar_documento: /^(lugardedocumento|lugardocumento|lugar_documento)$/i,
+};
+
+// Solo llena campos vacíos: nunca pisa lo que el usuario ya escribió
+function personFills(fields, values, person) {
+  if (!person) return {};
+  const fills = {};
+  for (const f of fields ?? []) {
+    const key = Object.keys(PERSON_FIELDS).find((k) => PERSON_FIELDS[k].test(f.name));
+    if (key && person[key] && !values[f.name]) fills[f.name] = person[key];
+  }
+  return fills;
+}
 
 function initialValues(type) {
   return Object.fromEntries((type.fields ?? []).filter(isIssueDate).map((f) => [f.name, todayISO()]));
@@ -76,14 +95,31 @@ export default function GeneratorPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipoParam, allTypes]);
 
+  // Si la cédula ya fue atendida antes, ofrecer sus datos de identidad
+  const idFieldName = selectedType?.fields?.find((f) => ID_FIELD.test(f.name))?.name;
+  const cedula = idFieldName ? String(formValues[idFieldName] ?? '').trim() : '';
+  const [person, setPerson] = useState(null);
+  useEffect(() => {
+    setPerson(null);
+    if (!isOnline || cedula.length < 5) return;
+    let stale = false;
+    const t = setTimeout(() => {
+      findPerson(cedula, token)
+        .then((p) => { if (!stale) setPerson(p); })
+        .catch(() => {}); // la sugerencia es opcional: si falla, el usuario escribe a mano
+    }, 600);
+    return () => { stale = true; clearTimeout(t); };
+  }, [cedula, isOnline, token]);
+  const fills = personFills(selectedType?.fields, formValues, person);
+
   function handleFieldChange(name, value) {
     setFormValues((prev) => ({ ...prev, [name]: value }));
   }
 
   function getBeneficiaryFromForm() {
     const fields = selectedType?.fields ?? [];
-    const nameField = fields.find((f) => /^(nombre|nombre_completo|nombre_titular)$/i.test(f.name));
-    const idField   = fields.find((f) => /^(cedula|numerodocumento|numero_documento)$/i.test(f.name));
+    const nameField = fields.find((f) => PERSON_FIELDS.nombre.test(f.name));
+    const idField   = fields.find((f) => ID_FIELD.test(f.name));
     // Para documentos sin beneficiario personal, usar destinatario/entidad como referencia
     const fallbackField = fields.find((f) => /^(destinatario|nombre_entidad|entidad)$/i.test(f.name));
     return {
@@ -271,6 +307,18 @@ export default function GeneratorPage() {
                     submitAttempted={submitAttempted}
                     onErrorsChange={setDynErrors}
                   />
+                </div>
+              )}
+
+              {Object.keys(fills).length > 0 && (
+                <div role="status" className="bg-jal-blue-50 border border-jal-blue-200 rounded-lg px-4 py-3 text-gray-900 flex flex-wrap items-center gap-3">
+                  <p className="flex-1 min-w-[12rem]">
+                    Ya atendimos a <strong>{person.nombre}</strong> con este número. ¿Usar sus datos guardados?
+                  </p>
+                  <button type="button" className="btn-primary" onClick={() => { setFormValues((prev) => ({ ...prev, ...fills })); setPerson(null); }}>
+                    Usar sus datos
+                  </button>
+                  <button type="button" className="btn-secondary" onClick={() => setPerson(null)}>No, gracias</button>
                 </div>
               )}
 

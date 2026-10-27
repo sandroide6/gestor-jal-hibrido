@@ -254,6 +254,28 @@ async function listOwnDocuments(jalId, userId, { page, limit }) {
   return { data: rows, total: count, page, limit, pages: Math.ceil(count / limit) };
 }
 
+// Solo datos de identidad (decisión D1): nada de dirección, teléfono ni motivos anteriores
+const PERSON_KEYS = {
+  tipo_documento:  /^(tipodeidentificacion|tipodocumento|tipo_documento)$/i,
+  lugar_documento: /^(lugardedocumento|lugardocumento|lugar_documento)$/i,
+};
+
+async function findPersonByDocumentId(jalId, beneficiaryId) {
+  const doc = await Document.findOne({
+    where: { jal_id: jalId, beneficiary_id: beneficiaryId },
+    order: [['created_at', 'DESC']],
+    attributes: ['beneficiary_name', 'metadata'],
+  });
+  if (!doc?.beneficiary_name) return null;
+  const entries = Object.entries(doc.metadata || {});
+  const pick = (re) => entries.find(([k, v]) => re.test(k) && v)?.[1] || '';
+  return {
+    nombre: doc.beneficiary_name,
+    tipo_documento: pick(PERSON_KEYS.tipo_documento),
+    lugar_documento: pick(PERSON_KEYS.lugar_documento),
+  };
+}
+
 async function listDocumentsForEdil(jalId, filters) {
   const { doc_type_name, user_id, beneficiary, numero_radicado, sync_status, reviewed, date_from, date_to, page, limit } = filters;
 
@@ -350,6 +372,7 @@ module.exports = {
   findDocumentWithAuthor,
   listOwnDocuments,
   listDocumentsForEdil,
+  findPersonByDocumentId,
   markDocumentReviewed,
   countPendingReview,
   deleteDocument,
