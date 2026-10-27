@@ -91,7 +91,7 @@ Ve a **http://localhost:5173** e inicia sesión con:
 | Campo | Valor |
 |-------|-------|
 | Correo | `admin@jal.gov.co` |
-| Contraseña | `Admin1234!` |
+| Contraseña | La de `ADMIN_INITIAL_PASSWORD` en `backend/.env` (si no la pusiste, la que trae el seeder en `backend/seeders/`). Cámbiala en el primer inicio de sesión |
 
 ### 3. Detener el sistema
 
