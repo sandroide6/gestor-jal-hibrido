@@ -169,7 +169,7 @@ function Guide({ guide }) {
             src={`/ayuda/${guide.img}`}
             alt={`Ejemplo en pantalla: ${guide.title}`}
             loading="lazy"
-            className="rounded-lg border border-gray-200 w-full"
+            className="block max-w-full h-auto rounded-lg border border-gray-200"
           />
         )}
       </div>
