@@ -38,6 +38,7 @@ const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage'));
 const ProfilePage   = lazy(() => import('./pages/ProfilePage'));
 const JalConfigPage = lazy(() => import('./pages/JalConfigPage'));
 const BackupPage    = lazy(() => import('./pages/BackupPage'));
+const HelpPage      = lazy(() => import('./pages/HelpPage'));
 
 function PageLoader() {
   return (
@@ -182,6 +183,15 @@ export default function App() {
           element={
             <RoleGuard requireAuth roles={['administrador', 'edil', 'auxiliar']}>
               <ProfilePage />
+            </RoleGuard>
+          }
+        />
+
+        <Route
+          path="/ayuda"
+          element={
+            <RoleGuard requireAuth roles={['administrador', 'edil', 'auxiliar']}>
+              <HelpPage />
             </RoleGuard>
           }
         />
