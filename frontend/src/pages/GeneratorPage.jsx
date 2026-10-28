@@ -51,7 +51,7 @@ export default function GeneratorPage() {
 
   const { data: allTypes, loading: loadingTypes, error: typeError } = useDocTypes(token);
   const docTypes = (allTypes ?? []).filter((t) => t.active);
-  const { ediles } = useEdiles(isAuxiliar ? token : null);
+  const { ediles } = useEdiles(isAuxiliar);
 
   const [step, setStep] = useState(STEPS.SELECT);
   const [selectedType, setSelectedType] = useState(null);
@@ -194,7 +194,7 @@ export default function GeneratorPage() {
 
   // Cachear la firma del edil para uso offline
   useEffect(() => {
-    if (!selectedEdilId || !token) return;
+    if (!selectedEdilId) return;
     cacheEdilSignature(selectedEdilId, token);
   }, [selectedEdilId, token]);
 
