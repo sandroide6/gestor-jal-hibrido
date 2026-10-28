@@ -279,7 +279,7 @@ toda esta sección y dejar `TS_AUTHKEY`/`PROXY_TARGET_HOST` vacíos en Render.
 # Login real
 curl -X POST https://TU_BACKEND.onrender.com/v1/auth/login \
   -H "Origin: https://TU_FRONTEND.vercel.app" -H "Content-Type: application/json" \
-  -c cookies.txt -d '{"email":"admin@jal.gov.co","password":"Admin1234!"}'
+  -c cookies.txt -d '{"email":"admin@jal.gov.co","password":"TU_CONTRASEÑA"}'
 ```
 
 Probado en navegador real (no solo curl) con Playwright headless: login
