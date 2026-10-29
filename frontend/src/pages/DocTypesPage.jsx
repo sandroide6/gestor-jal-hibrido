@@ -1,6 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import PropTypes from 'prop-types';
-import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { useAuthStore } from '../stores/authStore';
 import AppLayout from '../components/ui/AppLayout';
@@ -9,6 +8,12 @@ import { useDocTypes } from '../hooks/useDocTypes';
 import { FIELD_TYPES, FIELD_TYPE_LABEL, TIPOS_TRAMITE, TIPO_TRAMITE_LABEL } from '../constants';
 import { SkeletonTable } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
+import Dialog, { ConfirmDialog } from '../components/ui/Dialog';
+import Notice from '../components/ui/Notice';
+import Spinner from '../components/ui/Spinner';
+import Icon from '../components/ui/Icon';
+import StatusBadge from '../components/ui/StatusBadge';
+import { toast } from '../stores/toastStore';
 
 const EMPTY_FIELD = { name: '', label: '', type: 'text', required: true, options: '', placeholder: '', minLength: '', maxLength: '', min: '', max: '', inputFilter: '' };
 
@@ -33,14 +38,15 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
   const hasPlaceholder = currentType !== 'select' && currentType !== 'checklist';
 
   return (
-    <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+    <div className="space-y-3 rounded-md border border-line bg-sunken p-4">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-gray-500">Campo #{index + 1}</span>
+        <span className="font-semibold text-ink">Campo {index + 1}</span>
         <button
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className="text-xs text-red-500 hover:underline disabled:opacity-40"
+          className="btn-ghost btn-sm !text-danger-fg"
+          aria-label={`Eliminar campo ${index + 1}`}
         >
           Eliminar
         </button>
@@ -49,9 +55,10 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
       {/* Nombre + etiqueta */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
-          <label className="label">Nombre interno</label>
+          <label className="label" htmlFor={`f${index}-name`}>Nombre interno</label>
           <input
-            className="input text-xs"
+            id={`f${index}-name`}
+            className="input"
             placeholder="ej. num_sesion"
             pattern="[a-z_][a-z0-9_]*"
             disabled={disabled}
@@ -63,9 +70,10 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
           />
         </div>
         <div>
-          <label className="label">Etiqueta visible</label>
+          <label className="label" htmlFor={`f${index}-label`}>Etiqueta visible</label>
           <input
-            className="input text-xs"
+            id={`f${index}-label`}
+            className="input"
             placeholder="ej. Número de sesión"
             disabled={disabled}
             {...register(`fields.${index}.label`, { required: true, maxLength: 200 })}
@@ -76,19 +84,19 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
       {/* Tipo + obligatorio */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="label">Tipo</label>
-          <select className="input text-xs" disabled={disabled} {...register(`fields.${index}.type`)}>
+          <label className="label" htmlFor={`f${index}-type`}>Tipo</label>
+          <select id={`f${index}-type`} className="input" disabled={disabled} {...register(`fields.${index}.type`)}>
             {FIELD_TYPES.map(t => (
               <option key={t} value={t}>{FIELD_TYPE_LABEL[t]}</option>
             ))}
           </select>
         </div>
-        <div className="flex items-end pb-1">
-          <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer">
+        <div className="flex items-end">
+          <label className="flex min-h-[48px] cursor-pointer items-center gap-2 text-ink">
             <input
               type="checkbox"
               disabled={disabled}
-              className="w-3.5 h-3.5 rounded accent-jal-blue-500"
+              className="h-5 w-5 rounded accent-brand"
               {...register(`fields.${index}.required`)}
             />
             Obligatorio
@@ -99,8 +107,8 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
       {/* Filtro de entrada — visible siempre para texto corto */}
       {currentType === 'text' && (
         <div>
-          <label className="label">Filtro de entrada</label>
-          <select className="input text-xs" disabled={disabled} {...register(`fields.${index}.inputFilter`)}>
+          <label className="label" htmlFor={`f${index}-filter`}>Filtro de entrada</label>
+          <select id={`f${index}-filter`} className="input" disabled={disabled} {...register(`fields.${index}.inputFilter`)}>
             <option value="">Sin filtro (letras y números)</option>
             <option value="solo_letras">Solo letras y espacios</option>
             <option value="solo_numeros">Solo números</option>
@@ -111,14 +119,15 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
       {/* Opciones para select y checklist */}
       {hasOptions && (
         <div>
-          <label className="label">
+          <label className="label" htmlFor={`f${index}-options`}>
             Opciones (separadas por coma)
             {currentType === 'checklist' && (
-              <span className="text-gray-400 font-normal"> — el usuario podrá marcar varias</span>
+              <span className="text-ink-muted font-normal"> — el usuario podrá marcar varias</span>
             )}
           </label>
           <input
-            className="input text-xs"
+            id={`f${index}-options`}
+            className="input"
             placeholder="ej. Opción A, Opción B, Opción C"
             disabled={disabled}
             {...register(`fields.${index}.options`, { required: hasOptions })}
@@ -132,11 +141,10 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
           <button
             type="button"
             onClick={() => setShowAdvanced(v => !v)}
-            className="text-xs text-jal-blue-500 hover:underline flex items-center gap-1"
+            aria-expanded={showAdvanced}
+            className="btn-ghost btn-sm -ml-2"
           >
-            <svg className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
+            <Icon name="chevron" size={16} className={showAdvanced ? 'rotate-90' : ''} />
             Validaciones opcionales
           </button>
 
@@ -144,9 +152,11 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
             <div className="mt-2 grid grid-cols-2 gap-2">
               {hasPlaceholder && (
                 <div className="col-span-2">
-                  <label className="label">Texto de ayuda (placeholder)</label>
+                  <label className="label" htmlFor={`f${index}-ph`}>Texto de ayuda</label>
+                  <p className="hint">Se muestra debajo de la etiqueta para orientar a quien llena el formulario.</p>
                   <input
-                    className="input text-xs"
+                    id={`f${index}-ph`}
+                    className="input"
                     placeholder={PLACEHOLDER_HINT[currentType] ?? 'ej. Ingresa el valor'}
                     disabled={disabled}
                     {...register(`fields.${index}.placeholder`, { maxLength: 200 })}
@@ -157,12 +167,12 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
                 <>
                   <div>
                     <label className="label">Mínimo de caracteres</label>
-                    <input type="number" min={0} className="input text-xs" disabled={disabled}
+                    <input type="number" min={0} className="input" disabled={disabled}
                       {...register(`fields.${index}.minLength`, { valueAsNumber: true, min: 0 })} />
                   </div>
                   <div>
                     <label className="label">Máximo de caracteres</label>
-                    <input type="number" min={1} className="input text-xs" disabled={disabled}
+                    <input type="number" min={1} className="input" disabled={disabled}
                       placeholder={currentType === 'textarea' ? '2000' : '500'}
                       {...register(`fields.${index}.maxLength`, { valueAsNumber: true, min: 1 })} />
                   </div>
@@ -172,12 +182,12 @@ function FieldRow({ index, currentType, register, onRemove, disabled }) {
                 <>
                   <div>
                     <label className="label">Valor mínimo</label>
-                    <input type="number" className="input text-xs" disabled={disabled}
+                    <input type="number" className="input" disabled={disabled}
                       {...register(`fields.${index}.min`, { valueAsNumber: true })} />
                   </div>
                   <div>
                     <label className="label">Valor máximo</label>
-                    <input type="number" className="input text-xs" disabled={disabled}
+                    <input type="number" className="input" disabled={disabled}
                       {...register(`fields.${index}.max`, { valueAsNumber: true })} />
                   </div>
                 </>
@@ -201,8 +211,6 @@ function DocTypeModal({ docType, onClose, onSave }) {
   const isEdit = !!docType;
   const [templateFile, setTemplateFile] = useState(null);
   const [warnings, setWarnings] = useState([]);
-  const dialogRef = useRef(null);
-  useFocusTrap(dialogRef, { onEscape: onClose });
 
   const {
     register,
@@ -276,22 +284,13 @@ function DocTypeModal({ docType, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="doctype-modal-title"
-        className="bg-white rounded-xl shadow-xl w-full max-w-2xl my-8"
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 id="doctype-modal-title" className="font-semibold text-gray-800">
-            {isEdit ? 'Editar tipo de documento' : 'Nuevo tipo de documento'}
-          </h2>
-          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-5">
+    <Dialog
+      title={isEdit ? `Editar «${docType.name}»` : 'Nuevo tipo de documento'}
+      description="Los campos que definas aquí son los datos que se pedirán al crear el documento."
+      onClose={isSubmitting ? () => {} : onClose}
+      size="lg"
+    >
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <div>
             <label className="label">Nombre del tipo</label>
             <input
@@ -300,7 +299,7 @@ function DocTypeModal({ docType, onClose, onSave }) {
               disabled={isSubmitting}
               {...register('name', { required: 'El nombre es obligatorio', minLength: 2, maxLength: 200 })}
             />
-            {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name.message}</p>}
+            {errors.name && <p className="text-sm text-danger-fg mt-1">{errors.name.message}</p>}
           </div>
 
           <div>
@@ -314,7 +313,7 @@ function DocTypeModal({ docType, onClose, onSave }) {
                 <option key={t} value={t}>{TIPO_TRAMITE_LABEL[t]}</option>
               ))}
             </select>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-sm text-ink-muted mt-1">
               Define la serie del número de radicado (entrada, salida o interno) para los documentos generados con este tipo.
             </p>
           </div>
@@ -326,7 +325,7 @@ function DocTypeModal({ docType, onClose, onSave }) {
                 type="button"
                 onClick={() => append({ ...EMPTY_FIELD })}
                 disabled={isSubmitting}
-                className="text-xs text-jal-blue-500 hover:underline font-medium"
+                className="text-sm text-brand hover:underline font-medium"
               >
                 + Agregar campo
               </button>
@@ -355,49 +354,42 @@ function DocTypeModal({ docType, onClose, onSave }) {
               accept=".docx"
               disabled={isSubmitting}
               onChange={e => setTemplateFile(e.target.files[0] || null)}
-              className="block w-full text-xs text-gray-600 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-jal-blue-50 file:text-jal-blue-600 hover:file:bg-jal-blue-100"
+              className="block w-full text-sm text-ink-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:font-medium file:bg-brand-tint file:text-brand hover:file:bg-brand-tint"
             />
             {isEdit && (docType.has_template || docType.template_path) && !templateFile && (
-              <p className="text-xs text-green-600 mt-1">
+              <p className="text-sm text-success-fg mt-1">
                 Plantilla cargada. Sube un nuevo archivo para reemplazarla.
               </p>
             )}
-            <p className="text-xs text-gray-400 mt-1">
-              Variables disponibles: <code className="bg-gray-100 px-1 rounded">{'{{campo_name}}'}</code>,{' '}
-              <code className="bg-gray-100 px-1 rounded">{'{{jal_name}}'}</code>,{' '}
-              <code className="bg-gray-100 px-1 rounded">{'{{beneficiary_name}}'}</code>,{' '}
-              <code className="bg-gray-100 px-1 rounded">{'{{fecha_expedicion}}'}</code>
+            <p className="text-sm text-ink-muted mt-1">
+              Variables disponibles: <code className="bg-sunken px-1 rounded">{'{{campo_name}}'}</code>,{' '}
+              <code className="bg-sunken px-1 rounded">{'{{jal_name}}'}</code>,{' '}
+              <code className="bg-sunken px-1 rounded">{'{{beneficiary_name}}'}</code>,{' '}
+              <code className="bg-sunken px-1 rounded">{'{{fecha_expedicion}}'}</code>
             </p>
           </div>
 
-          {errors.root && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {errors.root.message}
-            </p>
-          )}
+          {errors.root && <Notice tone="danger">{errors.root.message}</Notice>}
 
           {warnings.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1">
-              {warnings.map((w, i) => (
-                <p key={i} className="text-xs text-amber-700">{w}</p>
-              ))}
-              <p className="text-xs text-amber-600 font-medium">
-                El tipo fue guardado. Revisa las variables de la plantilla.
-              </p>
-            </div>
+            <Notice tone="warning" title="El tipo quedó guardado, pero revisa la plantilla">
+              <ul className="list-disc space-y-1 pl-5">
+                {warnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </Notice>
           )}
 
-          <div className="flex gap-2 pt-2">
-            <button type="submit" className="btn-primary" disabled={isSubmitting}>
-              {isSubmitting ? 'Guardando…' : 'Guardar'}
-            </button>
+          <div className="flex flex-wrap-reverse justify-end gap-2 border-t border-line pt-4">
             <button type="button" className="btn-secondary" onClick={onClose} disabled={isSubmitting}>
-              Cancelar
+              {warnings.length > 0 ? 'Cerrar' : 'Cancelar'}
+            </button>
+            <button type="submit" className="btn-primary" disabled={isSubmitting} aria-busy={isSubmitting || undefined}>
+              {isSubmitting && <Spinner />}
+              {isSubmitting ? 'Guardando…' : 'Guardar'}
             </button>
           </div>
         </form>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 const docTypeShape = PropTypes.shape({ id: PropTypes.string, name: PropTypes.string, fields: PropTypes.array, active: PropTypes.bool });
@@ -409,43 +401,29 @@ DocTypeModal.propTypes = {
 
 function ToggleActiveModal({ docType, onClose, onConfirm }) {
   const [saving, setSaving] = useState(false);
-  const action = docType.active ? 'desactivar' : 'activar';
-  const dialogRef = useRef(null);
-  useFocusTrap(dialogRef, { onEscape: onClose });
 
   async function handle() {
     setSaving(true);
-    await onConfirm();
-    setSaving(false);
+    try {
+      await onConfirm();
+    } catch (err) {
+      toast.error(err.message || 'No se pudo cambiar el estado del tipo de documento.');
+      setSaving(false);
+    }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div
-        ref={dialogRef}
-        role="alertdialog"
-        aria-modal="true"
-        aria-describedby="toggle-active-desc"
-        className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
-      >
-        <p id="toggle-active-desc" className="text-gray-700 text-sm mb-6">
-          ¿{docType.active ? 'Desactivar' : 'Activar'} el tipo <strong>{docType.name}</strong>?{' '}
-          {docType.active
-            ? 'No aparecerá en el generador de documentos.'
-            : 'Volverá a estar disponible para los auxiliares.'}
-        </p>
-        <div className="flex gap-2 justify-end">
-          <button className="btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-          <button
-            className={docType.active ? 'btn-danger' : 'btn-primary'}
-            onClick={handle}
-            disabled={saving}
-          >
-            {saving ? '…' : `Sí, ${action}`}
-          </button>
-        </div>
-      </div>
-    </div>
+    <ConfirmDialog
+      danger={docType.active}
+      busy={saving}
+      title={`¿${docType.active ? 'Desactivar' : 'Activar'} «${docType.name}»?`}
+      message={docType.active
+        ? 'Dejará de aparecer al crear documentos. Los documentos ya creados no cambian.'
+        : 'Volverá a aparecer para que los auxiliares puedan crearlo.'}
+      confirmLabel={docType.active ? 'Desactivar' : 'Activar'}
+      onConfirm={handle}
+      onCancel={onClose}
+    />
   );
 }
 ToggleActiveModal.propTypes = {
@@ -486,7 +464,13 @@ export default function DocTypesPage() {
   const activeCount = displayTypes.filter(d => d.active).length;
 
   return (
-    <AppLayout title="Tipos de Documento">
+    <AppLayout
+      title="Tipos de documento"
+      eyebrow="Administración"
+      description={loading ? 'Cargando…' : `${activeCount} activos de ${displayTypes.length}. Cada tipo es una plantilla con los datos que pide.`}
+      actions={<button type="button" className="btn-primary" onClick={() => setModal({ type: 'create' })}><Icon name="mas" />Nuevo tipo</button>}
+      width="page"
+    >
       {modal?.type === 'create' && (
         <DocTypeModal
           onClose={() => setModal(null)}
@@ -508,77 +492,57 @@ export default function DocTypesPage() {
         />
       )}
 
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">
-          {activeCount} activo(s) · {displayTypes.length} total
-        </p>
-        <button className="btn-primary" onClick={() => setModal({ type: 'create' })}>
-          + Nuevo tipo
-        </button>
-      </div>
+      {loadError && <Notice tone="danger" title="No se pudo cargar la lista" className="mb-4">{loadError}</Notice>}
 
-      {loadError && <p className="text-sm text-red-600 mb-4">{loadError}</p>}
-
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-jal-blue-500 text-white">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium">Nombre</th>
-              <th className="px-4 py-3 text-left text-xs font-medium hidden sm:table-cell">Campos</th>
-              <th className="px-4 py-3 text-left text-xs font-medium hidden sm:table-cell">Plantilla</th>
-              <th className="px-4 py-3 text-left text-xs font-medium">Estado</th>
-              <th className="px-4 py-3 text-left text-xs font-medium">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading && (
-              <tr>
-                <td colSpan={5} className="px-4 py-4"><SkeletonTable rows={4} cols={5} /></td>
-              </tr>
-            )}
-            {!loading && displayTypes.length === 0 && (
-              <tr><EmptyState message="No hay tipos de documento. Crea el primero." colSpan={5} /></tr>
-            )}
-            {!loading && displayTypes.map(dt => (
-              <tr key={dt.id} className={`hover:bg-gray-50 ${!dt.active ? 'opacity-50' : ''}`}>
-                <td className="px-4 py-3 font-medium text-gray-800 text-xs">{dt.name}</td>
-                <td className="px-4 py-3 text-gray-500 text-xs hidden sm:table-cell">
-                  {dt.fields?.length ?? 0} campo(s)
-                </td>
-                <td className="px-4 py-3 text-xs hidden sm:table-cell">
-                  {(dt.has_template || dt.template_path)
-                    ? <span className="text-green-600 font-medium">Sí</span>
-                    : <span className="text-gray-400">No</span>}
-                </td>
-                <td className="px-4 py-3">
-                  {dt.active
-                    ? <span className="badge-synced">Activo</span>
-                    : <span className="badge-conflict">Inactivo</span>}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-2">
-                    <button
-                      className="text-xs text-jal-blue-500 hover:underline"
-                      onClick={async () => {
-                        const fresh = await fetchDocType(dt.id, token).catch(() => dt);
-                        setModal({ type: 'edit', docType: fresh });
-                      }}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      className={`text-xs hover:underline ${dt.active ? 'text-red-500' : 'text-green-600'}`}
-                      onClick={() => setToggleModal(dt)}
-                    >
-                      {dt.active ? 'Desactivar' : 'Activar'}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {loading ? (
+        <SkeletonTable rows={4} cols={4} />
+      ) : displayTypes.length === 0 ? (
+        <EmptyState
+          title="Todavía no hay tipos de documento"
+          message="Crea el primero: ponle nombre, define los datos que pide y sube su plantilla de Word."
+          action={<button type="button" className="btn-primary" onClick={() => setModal({ type: 'create' })}>Crear el primero</button>}
+        />
+      ) : (
+        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {displayTypes.map((dt, i) => (
+            <li key={dt.id} className={`card relative flex flex-col p-5 ${!dt.active ? 'bg-sunken' : ''}`}>
+              <span aria-hidden="true" className="absolute left-0 top-5 h-8 w-1 rounded-r bg-accent" />
+              <p className="text-eyebrow uppercase text-ink-muted">
+                Folio {String(i + 1).padStart(2, '0')} · {TIPO_TRAMITE_LABEL[dt.tipo_tramite] ?? 'Trámite'}
+              </p>
+              <h2 className="title-card mt-1">{dt.name}</h2>
+              <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-ink-muted">
+                <div><dt className="sr-only">Campos</dt><dd>{dt.fields?.length ?? 0} dato{(dt.fields?.length ?? 0) === 1 ? '' : 's'}</dd></div>
+                <div><dt className="sr-only">Plantilla</dt><dd>{(dt.has_template || dt.template_path) ? 'Con plantilla Word' : 'Sin plantilla'}</dd></div>
+              </dl>
+              <div className="mb-4 mt-3">
+                {dt.active ? <StatusBadge tone="success">Activo</StatusBadge> : <StatusBadge tone="neutral">Inactivo</StatusBadge>}
+              </div>
+              <div className="mt-auto flex flex-wrap gap-2 border-t border-line pt-4">
+                <button
+                  type="button"
+                  className="btn-secondary btn-sm"
+                  aria-label={`Editar ${dt.name}`}
+                  onClick={async () => {
+                    const fresh = await fetchDocType(dt.id, token).catch(() => dt);
+                    setModal({ type: 'edit', docType: fresh });
+                  }}
+                >
+                  <Icon name="editar" size={18} />Editar
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost btn-sm"
+                  aria-label={`${dt.active ? 'Desactivar' : 'Activar'} ${dt.name}`}
+                  onClick={() => setToggleModal(dt)}
+                >
+                  {dt.active ? 'Desactivar' : 'Activar'}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </AppLayout>
   );
 }

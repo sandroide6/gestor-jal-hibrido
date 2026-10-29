@@ -4,6 +4,10 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../services/api';
+import AuthShell from '../components/ui/AuthShell';
+import Notice from '../components/ui/Notice';
+import SpinnerIcon from '../components/ui/Spinner';
+import Icon from '../components/ui/Icon';
 
 // En el plan gratis de Render el backend se duerme tras ~15 min sin uso y tarda
 // ~30-60s en despertar. Mientras tanto el login falla por red o con 502/503/504
@@ -103,125 +107,110 @@ export default function LoginPage() {
     }
   }
 
+  const aside = (
+    <ul className="space-y-4 text-white/90">
+      {[
+        'Crea certificados y cartas con los datos de cada persona.',
+        'Encuentra cualquier documento por nombre, cédula o radicado.',
+        'Sigue trabajando aunque se caiga internet: se envía al volver.',
+      ].map((t) => (
+        <li key={t} className="flex gap-3"><Icon name="check" className="mt-1 text-accent-200" />{t}</li>
+      ))}
+    </ul>
+  );
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-jal-blue-500 to-jal-blue-700 p-4">
-      <div className="w-full max-w-md">
-        <div className="card">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-jal-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-md">
-              <span className="text-white text-2xl font-bold select-none">
-                {(import.meta.env.VITE_JAL_SHORT || 'JAL').slice(0, 3)}
-              </span>
-            </div>
-            <h1 className="text-xl font-bold text-jal-blue-500">
-              {import.meta.env.VITE_JAL_NOMBRE || 'Gestor JAL'}
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">Junta Administradora Local — Medellín</p>
+    <AuthShell aside={aside}>
+      {step === 'password' ? (
+        <form onSubmit={handleSubmit(onPasswordSubmit)} className="space-y-5" noValidate>
+          <div className="mb-2">
+            <p className="eyebrow mb-2">Acceso del personal</p>
+            <h1 className="title-page">Iniciar sesión</h1>
+            <p className="mt-1 text-ink-muted">Usa el correo y la contraseña que te dio el administrador de la JAL.</p>
           </div>
-
-          {step === 'password' ? (
-            <form onSubmit={handleSubmit(onPasswordSubmit)} className="space-y-4" noValidate>
-              <div>
-                <label className="label" htmlFor="email">Correo electrónico</label>
-                <input
-                  id="email" type="email" className="input"
-                  placeholder="auxiliar@jal.gov.co"
-                  autoComplete="username" disabled={isSubmitting}
-                  {...register('email', { required: 'Ingresa tu correo electrónico' })}
-                />
-                {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email.message}</p>}
-              </div>
-              <div>
-                <label className="label" htmlFor="password">Contraseña</label>
-                <input
-                  id="password" type="password" className="input"
-                  placeholder="••••••••"
-                  autoComplete="current-password" disabled={isSubmitting}
-                  {...register('password', { required: 'Ingresa tu contraseña' })}
-                />
-                {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password.message}</p>}
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  id="remember_me" type="checkbox"
-                  className="h-4 w-4 rounded border-gray-300 text-jal-blue-500 focus:ring-jal-blue-400"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  disabled={isSubmitting}
-                />
-                <label htmlFor="remember_me" className="text-sm text-gray-600 select-none">
-                  Recordarme en este dispositivo
-                </label>
-              </div>
-              {waking && (
-                <div role="status" className="text-sm text-jal-blue-700 bg-jal-blue-50 border border-jal-blue-200 rounded-lg px-3 py-2">
-                  El servidor se está despertando después de un rato sin uso. Puede tardar hasta un minuto;
-                  seguimos intentando solos, no cierres la página.
-                </div>
-              )}
-              {errors.root && (
-                <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {errors.root.message}
-                </div>
-              )}
-              <button type="submit" className="btn-primary w-full mt-2" disabled={isSubmitting}>
-                {isSubmitting
-                  ? <Spinner text={waking ? 'Despertando el servidor…' : 'Verificando…'} />
-                  : 'Iniciar sesión'}
-              </button>
-            </form>
-          ) : (
-            <form onSubmit={handleTotpSubmit} className="space-y-4" noValidate>
-              <div className="text-center mb-2">
-                <div className="w-12 h-12 bg-jal-blue-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6 text-jal-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-                <h2 className="font-semibold text-gray-800">Verificación en dos pasos</h2>
-                <p className="text-sm text-gray-500 mt-1">Abre tu app autenticadora e ingresa el código de 6 dígitos</p>
-              </div>
-              <div>
-                <label className="label" htmlFor="totp">Código de verificación</label>
-                <input
-                  id="totp" type="text" inputMode="numeric" pattern="\d{6}"
-                  className="input text-center text-2xl tracking-widest font-mono"
-                  placeholder="000000" maxLength={6}
-                  value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
-                  required autoComplete="one-time-code" autoFocus disabled={totpLoading}
-                />
-              </div>
-              {totpError && (
-                <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {totpError}
-                </div>
-              )}
-              <button type="submit" className="btn-primary w-full" disabled={totpLoading || totpCode.length !== 6}>
-                {totpLoading ? <Spinner text="Verificando…" /> : 'Verificar'}
-              </button>
-              <button type="button" className="w-full text-sm text-gray-500 hover:text-gray-700 mt-1"
-                onClick={() => { setStep('password'); setTotpError(''); setTotpCode(''); }}>
-                ← Volver al inicio de sesión
-              </button>
-            </form>
+          <div>
+            <label className="label" htmlFor="email">Correo electrónico</label>
+            <input
+              id="email" type="email" className="input"
+              placeholder="nombre@correo.com"
+              autoComplete="username" disabled={isSubmitting}
+              aria-invalid={errors.email ? 'true' : undefined}
+              aria-describedby={errors.email ? 'email-error' : undefined}
+              {...register('email', { required: 'Ingresa tu correo electrónico' })}
+            />
+            {errors.email && <p id="email-error" className="field-error">{errors.email.message}</p>}
+          </div>
+          <div>
+            <label className="label" htmlFor="password">Contraseña</label>
+            <input
+              id="password" type="password" className="input"
+              autoComplete="current-password" disabled={isSubmitting}
+              aria-invalid={errors.password ? 'true' : undefined}
+              aria-describedby={errors.password ? 'password-error' : undefined}
+              {...register('password', { required: 'Ingresa tu contraseña' })}
+            />
+            {errors.password && <p id="password-error" className="field-error">{errors.password.message}</p>}
+          </div>
+          <label htmlFor="remember_me" className="flex min-h-[44px] cursor-pointer items-center gap-3 text-ink">
+            <input
+              id="remember_me" type="checkbox"
+              className="h-5 w-5 rounded accent-brand"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              disabled={isSubmitting}
+            />
+            Recordarme en este equipo
+          </label>
+          {waking && (
+            <Notice tone="info" title="El servidor se está despertando">
+              Pasa después de un rato sin uso y puede tardar hasta un minuto. Seguimos intentando solos; no cierres la página.
+            </Notice>
           )}
-
-          <p className="text-xs text-center text-gray-400 mt-6">
-            Sistema institucional — acceso restringido al personal autorizado
-          </p>
-        </div>
-      </div>
-    </div>
+          {errors.root && (
+            <Notice tone="danger">{errors.root.message}</Notice>
+          )}
+          <button type="submit" className="btn-primary btn-block" disabled={isSubmitting} aria-busy={isSubmitting || undefined}>
+            {isSubmitting
+              ? <Spinner text={waking ? 'Despertando el servidor…' : 'Verificando…'} />
+              : 'Iniciar sesión'}
+          </button>
+          <p className="text-[0.9375rem] text-ink-muted">¿Olvidaste tu contraseña? Habla con el administrador de la JAL.</p>
+        </form>
+      ) : (
+        <form onSubmit={handleTotpSubmit} className="space-y-5" noValidate>
+          <div>
+            <p className="eyebrow mb-2">Paso 2 de 2</p>
+            <h1 className="title-page">Verificación en dos pasos</h1>
+            <p className="mt-1 text-ink-muted">Abre tu app autenticadora y escribe el código de 6 dígitos.</p>
+          </div>
+          <div>
+            <label className="label" htmlFor="totp">Código de verificación</label>
+            <input
+              id="totp" type="text" inputMode="numeric" pattern="\d{6}"
+              className="input text-center font-mono text-2xl tracking-[0.4em]"
+              placeholder="000000" maxLength={6}
+              value={totpCode} onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
+              required autoComplete="one-time-code" autoFocus disabled={totpLoading}
+            />
+          </div>
+          {totpError && <Notice tone="danger">{totpError}</Notice>}
+          <button type="submit" className="btn-primary btn-block" disabled={totpLoading || totpCode.length !== 6}>
+            {totpLoading ? <Spinner text="Verificando…" /> : 'Verificar'}
+          </button>
+          <button type="button" className="btn-ghost btn-block"
+            onClick={() => { setStep('password'); setTotpError(''); setTotpCode(''); }}>
+            ← Volver al inicio de sesión
+          </button>
+        </form>
+      )}
+    </AuthShell>
   );
 }
 
 function Spinner({ text }) {
   return (
     <span className="flex items-center gap-2 justify-center">
-      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-      </svg>
+      <SpinnerIcon />
       {text}
     </span>
   );

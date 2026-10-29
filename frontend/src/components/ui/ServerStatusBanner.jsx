@@ -5,10 +5,12 @@ import { useEffect, useRef } from 'react';
 import { useServerStatusStore } from '../../stores/serverStatusStore';
 import { useSyncStore } from '../../stores/syncStore';
 import { statusFromResponse } from '../../services/api';
+import Icon from './Icon';
+import Spinner from './Spinner';
 
 const MESSAGES = {
-  degraded: 'Base de datos no disponible en este momento — algunas funciones no funcionarán hasta que se restablezca.',
-  unreachable: 'Despertando el servidor (puede tardar unos segundos tras un período sin uso) — reintentando…',
+  degraded: 'La base de datos no responde. Puedes seguir mirando, pero guardar o buscar fallará hasta que se restablezca.',
+  unreachable: 'El servidor se está despertando tras un rato sin uso. Puede tardar hasta un minuto; seguimos intentando.',
 };
 
 const POLL_MS = 5000;
@@ -51,19 +53,16 @@ export default function ServerStatusBanner() {
   if (backendStatus === 'ok' || !isOnline) return null;
 
   return (
-    // "Despertando" es una espera normal, no un error: azul con spinner en vez de rojo.
+    // "Despertando" es una espera normal, no un error: tono informativo con indicador.
     <div
       role="status"
-      className={`fixed top-0 left-0 right-0 z-50 text-white text-center text-sm py-1.5 px-4 font-medium flex items-center justify-center gap-2 ${
-        backendStatus === 'unreachable' ? 'bg-jal-blue-600' : 'bg-red-600'
+      className={`flex items-center justify-center gap-2 border-t px-4 py-2.5 text-center font-semibold ${
+        backendStatus === 'unreachable'
+          ? 'border-info-border bg-info-bg text-info-fg'
+          : 'border-danger-border bg-danger-bg text-danger-fg'
       }`}
     >
-      {backendStatus === 'unreachable' && (
-        <svg className="animate-spin h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-        </svg>
-      )}
+      {backendStatus === 'unreachable' ? <Spinner /> : <Icon name="error" size={18} />}
       {MESSAGES[backendStatus]}
     </div>
   );

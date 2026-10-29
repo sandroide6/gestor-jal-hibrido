@@ -1,6 +1,5 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import PropTypes from 'prop-types';
-import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useAuthStore } from '../stores/authStore';
 import AppLayout from '../components/ui/AppLayout';
 import { createUser, updateUser, deleteUser, hardDeleteUser } from '../services/usersService';
@@ -8,6 +7,12 @@ import { useUsers } from '../hooks/useUsers';
 import { ROLES, ROLE_LABEL } from '../constants';
 import { toast } from '../stores/toastStore';
 import { SkeletonTable } from '../components/ui/Skeleton';
+import Dialog, { ConfirmDialog } from '../components/ui/Dialog';
+import Notice from '../components/ui/Notice';
+import Spinner from '../components/ui/Spinner';
+import StatusBadge from '../components/ui/StatusBadge';
+import Icon from '../components/ui/Icon';
+
 const EMPTY_FORM = { name: '', email: '', password: '', role: 'auxiliar' };
 
 function UserModal({ user, onClose, onSave }) {
@@ -17,8 +22,6 @@ function UserModal({ user, onClose, onSave }) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const dialogRef = useRef(null);
-  useFocusTrap(dialogRef, { onEscape: onClose });
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -35,63 +38,50 @@ function UserModal({ user, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="user-modal-title"
-        className="bg-white rounded-xl shadow-xl w-full max-w-md"
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 id="user-modal-title" className="font-semibold text-gray-800">
-            {isEdit ? 'Editar usuario' : 'Nuevo usuario'}
-          </h2>
-          <button onClick={onClose} aria-label="Cerrar" className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+    <Dialog title={isEdit ? `Editar a ${user.name}` : 'Nuevo usuario'} onClose={saving ? () => {} : onClose} size="sm">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="label" htmlFor="u-nombre">Nombre completo</label>
+          <input id="u-nombre" className="input" value={form.name} autoComplete="off"
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            required minLength={2} disabled={saving} />
+        </div>
+        <div>
+          <label className="label" htmlFor="u-correo">Correo electrónico</label>
+          <p className="hint" id="u-correo-hint">Con este correo inicia sesión.</p>
+          <input id="u-correo" className="input" type="email" value={form.email} autoComplete="off" aria-describedby="u-correo-hint"
+            onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+            required disabled={saving} />
+        </div>
+        {!isEdit && (
+          <div>
+            <label className="label" htmlFor="u-clave">Contraseña temporal</label>
+            <p className="hint" id="u-clave-hint">Mínimo 8 caracteres. Entrégala a la persona para que la cambie al entrar.</p>
+            <input id="u-clave" className="input" type="password" value={form.password} autoComplete="new-password" aria-describedby="u-clave-hint"
+              onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+              required minLength={8} disabled={saving} />
+          </div>
+        )}
+        <div>
+          <label className="label" htmlFor="u-rol">Rol</label>
+          <select id="u-rol" className="input" value={form.role}
+            onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
+            disabled={saving}>
+            {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+          </select>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div>
-            <label className="label">Nombre completo</label>
-            <input className="input" value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              required minLength={2} disabled={saving} />
-          </div>
-          <div>
-            <label className="label">Correo electrónico</label>
-            <input className="input" type="email" value={form.email}
-              onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              required disabled={saving} />
-          </div>
-          {!isEdit && (
-            <div>
-              <label className="label">Contraseña temporal</label>
-              <input className="input" type="password" value={form.password}
-                onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                required minLength={8} disabled={saving}
-                placeholder="Mínimo 8 caracteres" />
-            </div>
-          )}
-          <div>
-            <label className="label">Rol</label>
-            <select className="input" value={form.role}
-              onChange={e => setForm(f => ({ ...f, role: e.target.value }))}
-              disabled={saving}>
-              {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-            </select>
-          </div>
+        {error && <Notice tone="danger">{error}</Notice>}
 
-          {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
-
-          <div className="flex gap-2 pt-2">
-            <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? 'Guardando…' : 'Guardar'}
-            </button>
-            <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex flex-wrap-reverse justify-end gap-2 pt-2">
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button type="submit" className="btn-primary" disabled={saving} aria-busy={saving || undefined}>
+            {saving && <Spinner />}
+            {saving ? 'Guardando…' : isEdit ? 'Guardar cambios' : 'Crear usuario'}
+          </button>
+        </div>
+      </form>
+    </Dialog>
   );
 }
 const userShape = PropTypes.shape({ id: PropTypes.string, name: PropTypes.string, email: PropTypes.string, role: PropTypes.string });
@@ -99,34 +89,6 @@ UserModal.propTypes = {
   user: userShape,
   onClose: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,
-};
-
-function ConfirmModal({ message, onConfirm, onCancel }) {
-  const dialogRef = useRef(null);
-  useFocusTrap(dialogRef, { onEscape: onCancel });
-
-  return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div
-        ref={dialogRef}
-        role="alertdialog"
-        aria-modal="true"
-        aria-describedby="confirm-modal-desc"
-        className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6"
-      >
-        <p id="confirm-modal-desc" className="text-gray-700 text-sm mb-6">{message}</p>
-        <div className="flex gap-2 justify-end">
-          <button className="btn-secondary" onClick={onCancel}>Cancelar</button>
-          <button className="btn-danger" onClick={onConfirm}>Confirmar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-ConfirmModal.propTypes = {
-  message: PropTypes.string.isRequired,
-  onConfirm: PropTypes.func.isRequired,
-  onCancel: PropTypes.func.isRequired,
 };
 
 export default function UsersPage() {
@@ -151,8 +113,11 @@ export default function UsersPage() {
 
   function askDeactivate(user) {
     setConfirm({
-      message: `¿Desactivar a ${user.name}? Sus sesiones activas se cerrarán inmediatamente.`,
+      title: `¿Desactivar a ${user.name}?`,
+      message: 'No podrá iniciar sesión y sus sesiones abiertas se cerrarán. Sus documentos se conservan y puedes volver a activarla cuando quieras.',
+      confirmLabel: 'Desactivar',
       action: async () => {
+        setConfirm((c) => c && { ...c, busy: true });
         try {
           await deleteUser(user.id, token);
           setUsers((prev) => (prev ?? data ?? []).map((u) => u.id === user.id ? { ...u, active: false } : u));
@@ -170,7 +135,7 @@ export default function UsersPage() {
     try {
       const updated = await updateUser(userId, { active: true }, token);
       setUsers((prev) => (prev ?? data ?? []).map((u) => u.id === userId ? { ...u, ...updated } : u));
-      toast.success('Usuario reactivado correctamente.');
+      toast.success('Usuario activado.');
     } catch (err) {
       toast.error(err.message || 'Error al reactivar el usuario');
     }
@@ -178,8 +143,11 @@ export default function UsersPage() {
 
   function askHardDelete(user) {
     setConfirm({
-      message: `¿Eliminar permanentemente a ${user.name}? Esta acción es irreversible y borrará el usuario del sistema. Solo es posible si no tiene documentos registrados.`,
+      title: `¿Eliminar a ${user.name} para siempre?`,
+      message: 'La cuenta se borra del sistema y no se puede deshacer. Solo es posible si no tiene documentos registrados; si los tiene, desactívala.',
+      confirmLabel: 'Eliminar para siempre',
       action: async () => {
+        setConfirm((c) => c && { ...c, busy: true });
         try {
           await hardDeleteUser(user.id, token);
           setUsers((prev) => (prev ?? data ?? []).filter((u) => u.id !== user.id));
@@ -193,8 +161,32 @@ export default function UsersPage() {
     });
   }
 
+  const actions = (u) => (
+    <div className="flex flex-wrap gap-2">
+      <button type="button" className="btn-secondary btn-sm" onClick={() => setModal({ type: 'edit', user: u })}
+        aria-label={`Editar a ${u.name}`}>
+        Editar
+      </button>
+      {u.id !== me?.id && u.active && (
+        <button type="button" className="btn-ghost btn-sm" onClick={() => askDeactivate(u)} aria-label={`Desactivar a ${u.name}`}>Desactivar</button>
+      )}
+      {u.id !== me?.id && !u.active && (
+        <button type="button" className="btn-ghost btn-sm" onClick={() => handleReactivate(u.id)} aria-label={`Activar a ${u.name}`}>Activar</button>
+      )}
+      {u.id !== me?.id && (
+        <button type="button" className="btn-ghost btn-sm !text-danger-fg hover:!bg-danger-bg" onClick={() => askHardDelete(u)} aria-label={`Eliminar a ${u.name}`}>Eliminar</button>
+      )}
+    </div>
+  );
+
   return (
-    <AppLayout title="Gestión de Usuarios">
+    <AppLayout
+      title="Usuarios"
+      eyebrow="Administración"
+      description={loading ? 'Cargando…' : `${displayUsers.length} cuenta${displayUsers.length === 1 ? '' : 's'}. Desactiva a quien ya no trabaja con la JAL: sus documentos se conservan.`}
+      actions={<button type="button" className="btn-primary" onClick={() => setModal({ type: 'create' })}><Icon name="mas" />Nuevo usuario</button>}
+      width="page"
+    >
       {modal?.type === 'create' && (
         <UserModal onClose={() => setModal(null)} onSave={handleCreate} />
       )}
@@ -203,77 +195,65 @@ export default function UsersPage() {
           onSave={form => handleEdit(modal.user.id, form)} />
       )}
       {confirm && (
-        <ConfirmModal message={confirm.message}
-          onConfirm={confirm.action} onCancel={() => setConfirm(null)} />
+        <ConfirmDialog danger title={confirm.title} message={confirm.message} confirmLabel={confirm.confirmLabel}
+          busy={!!confirm.busy} onConfirm={confirm.action} onCancel={() => setConfirm(null)} />
       )}
 
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">{displayUsers.length} usuario(s)</p>
-        <button className="btn-primary" onClick={() => setModal({ type: 'create' })}>
-          + Nuevo usuario
-        </button>
-      </div>
+      {error && (
+        <Notice tone="danger" title="No se pudo cargar la lista de usuarios" className="mb-4"
+          action={reload && <button type="button" className="btn-secondary btn-sm" onClick={reload}>Intentar de nuevo</button>}>
+          {error}
+        </Notice>
+      )}
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {loading ? (
+        <SkeletonTable rows={5} cols={4} />
+      ) : (
+        <>
+          {/* Escritorio: tabla */}
+          <div className="table-wrap hidden overflow-x-auto lg:block">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th scope="col">Nombre</th>
+                  <th scope="col">Correo</th>
+                  <th scope="col">Rol</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col"><span className="sr-only">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayUsers.map(u => (
+                  <tr key={u.id}>
+                    <td className="font-semibold">{u.name}{u.id === me?.id && <span className="ml-1 font-normal text-ink-muted">(tú)</span>}</td>
+                    <td className="text-ink-muted">{u.email}</td>
+                    <td>{ROLE_LABEL[u.role]}</td>
+                    <td>{u.active ? <StatusBadge tone="success">Activo</StatusBadge> : <StatusBadge tone="neutral">Inactivo</StatusBadge>}</td>
+                    <td className="text-right">{actions(u)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      <div className="card p-0 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-jal-blue-500 text-white">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium">Nombre</th>
-              <th className="px-4 py-3 text-left text-xs font-medium hidden md:table-cell">Correo</th>
-              <th className="px-4 py-3 text-left text-xs font-medium hidden sm:table-cell">Rol</th>
-              <th className="px-4 py-3 text-left text-xs font-medium hidden sm:table-cell">Estado</th>
-              <th className="px-4 py-3 text-left text-xs font-medium">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {loading && (
-              <tr><td colSpan={5} className="px-4 py-4"><SkeletonTable rows={5} cols={5} /></td></tr>
-            )}
-            {!loading && displayUsers.map(u => (
-              <tr key={u.id} className={`hover:bg-gray-50 ${!u.active ? 'opacity-50' : ''}`}>
-                <td className="px-4 py-3 font-medium text-gray-800 text-xs">
-                  <div>{u.name}{u.id === me?.id && <span className="ml-1 text-gray-400">(tú)</span>}</div>
-                  <div className="sm:hidden text-gray-400 font-normal mt-0.5">
-                    <span className="inline-block px-1.5 py-0.5 rounded-full bg-jal-blue-50 text-jal-blue-500 mr-1">{ROLE_LABEL[u.role]}</span>
-                    {u.active ? <span className="text-green-600">Activo</span> : <span className="text-red-500">Inactivo</span>}
+          {/* Móvil y tableta: fichas */}
+          <ul className="space-y-3 lg:hidden">
+            {displayUsers.map(u => (
+              <li key={u.id} className="card p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold">{u.name}{u.id === me?.id && <span className="ml-1 font-normal text-ink-muted">(tú)</span>}</p>
+                    <p className="break-all text-ink-muted">{u.email}</p>
+                    <p className="mt-1">{ROLE_LABEL[u.role]}</p>
                   </div>
-                </td>
-                <td className="px-4 py-3 text-gray-500 text-xs hidden md:table-cell">{u.email}</td>
-                <td className="px-4 py-3 hidden sm:table-cell">
-                  <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-jal-blue-100 text-jal-blue-600">
-                    {ROLE_LABEL[u.role]}
-                  </span>
-                </td>
-                <td className="px-4 py-3 hidden sm:table-cell">
-                  {u.active
-                    ? <span className="badge-synced">Activo</span>
-                    : <span className="badge-conflict">Inactivo</span>}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      className="text-xs text-jal-blue-500 hover:underline"
-                      onClick={() => setModal({ type: 'edit', user: u })}>
-                      Editar
-                    </button>
-                    {u.id !== me?.id && u.active && (
-                      <button className="text-xs text-red-500 hover:underline" onClick={() => askDeactivate(u)}>Desactivar</button>
-                    )}
-                    {u.id !== me?.id && !u.active && (
-                      <button className="text-xs text-green-600 hover:underline" onClick={() => handleReactivate(u.id)}>Activar</button>
-                    )}
-                    {u.id !== me?.id && (
-                      <button className="text-xs text-red-700 hover:underline font-semibold" onClick={() => askHardDelete(u)}>Eliminar</button>
-                    )}
-                  </div>
-                </td>
-              </tr>
+                  {u.active ? <StatusBadge tone="success">Activo</StatusBadge> : <StatusBadge tone="neutral">Inactivo</StatusBadge>}
+                </div>
+                <div className="mt-3 border-t border-line pt-3">{actions(u)}</div>
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+        </>
+      )}
     </AppLayout>
   );
 }

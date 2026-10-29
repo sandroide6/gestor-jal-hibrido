@@ -12,36 +12,48 @@ import { fetchReportStats, downloadDocumentsReport } from '../services/reportsSe
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useUsers } from '../hooks/useUsers';
 import { toast } from '../stores/toastStore';
+import Spinner from '../components/ui/Spinner';
+import Icon from '../components/ui/Icon';
+import EmptyState from '../components/ui/EmptyState';
 
-const PALETTE = ['#1e4d8c', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#ef4444'];
+// Colores de las gráficas tomados de styles/tokens.css (Recharts necesita valores literales).
+// Un solo tono por serie: los auxiliares no son categorías distintas, son la misma medida.
+const C = {
+  brand: '#193B35',
+  reviewed: '#2E6B4A',  // --color-success
+  pending: '#B07A12',   // --color-warning
+  grid: '#E3DED2',      // --color-line
+  tick: '#5B6560',      // --color-ink-muted
+};
+const TICK = { fontSize: 13, fill: C.tick };
 const EMPTY_FILTERS = { doc_type_id: '', user_id: '', date_from: '', date_to: '', reviewed: '' };
 
 // ── Componentes reutilizables ─────────────────────────────
 
-function StatCard({ label, value, sub, color = 'text-jal-blue-600' }) {
+function Figure({ label, value, sub }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center">
-      <p className={`text-3xl font-bold ${color}`}>{value ?? '—'}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-      <p className="text-xs text-gray-500 mt-1 font-medium">{label}</p>
+    <div className="bg-surface px-5 py-4">
+      <dt className="text-eyebrow uppercase text-ink-muted">{label}</dt>
+      <dd className="mt-1 font-serif text-4xl font-semibold leading-none text-brand">{value ?? '—'}</dd>
+      {sub && <dd className="mt-1.5 text-sm text-ink-muted">{sub}</dd>}
     </div>
   );
 }
 
 function ChartCard({ title, children, minH = 220 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
-      <h3 className="text-sm font-semibold text-gray-700 mb-4">{title}</h3>
+    <section className="card p-5">
+      <h2 className="title-card mb-4">{title}</h2>
       <div style={{ minHeight: minH }}>{children}</div>
-    </div>
+    </section>
   );
 }
 
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs max-w-[200px]">
-      {label && <p className="font-semibold text-gray-700 mb-1 truncate">{label}</p>}
+    <div className="bg-surface border border-line rounded-lg shadow-float px-3 py-2 text-sm max-w-[200px]">
+      {label && <p className="font-semibold text-ink mb-1 truncate">{label}</p>}
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color ?? p.fill }}>
           {p.name}: <strong>{p.value}</strong>
@@ -55,7 +67,7 @@ function CustomPieLegend({ payload }) {
   return (
     <ul className="flex justify-center gap-4 flex-wrap mt-2">
       {payload.map((entry, i) => (
-        <li key={i} className="flex items-center gap-1.5 text-xs text-gray-600">
+        <li key={i} className="flex items-center gap-1.5 text-sm text-ink-muted">
           <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: entry.color }} />
           {entry.value}: <strong>{entry.payload.value}</strong>
         </li>
@@ -66,7 +78,7 @@ function CustomPieLegend({ payload }) {
 
 function EmptyChart({ text = 'Sin datos para el período seleccionado' }) {
   return (
-    <div className="flex items-center justify-center h-36 text-sm text-gray-400">{text}</div>
+    <div className="flex h-36 items-center justify-center text-ink-muted">{text}</div>
   );
 }
 
@@ -115,7 +127,7 @@ export default function ReportsPage() {
     setExcel(true);
     try {
       await downloadDocumentsReport(applied, token);
-      toast.success('Reporte descargado correctamente.');
+      toast.success('Reporte en Excel descargado.');
     } catch (err) {
       toast.error(err.message || 'Error al generar el reporte');
     } finally {
@@ -131,85 +143,81 @@ export default function ReportsPage() {
   const pct = stats?.total ? Math.round((stats.reviewed / stats.total) * 100) : 0;
 
   return (
-    <AppLayout title="Reportes">
+    <AppLayout title="Reportes" eyebrow="Cifras del archivo" description="Filtra por tipo, persona o fechas. Lo que veas aquí es lo mismo que se descarga en Excel." width="page">
 
       {/* ── Filtros ── */}
-      <form onSubmit={handleApply} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <form onSubmit={handleApply} className="card mb-8 p-5" aria-label="Filtros del reporte">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <div>
-            <label className="label">Tipo de documento</label>
-            <select className="input text-xs" value={filters.doc_type_id} onChange={(e) => setField('doc_type_id', e.target.value)}>
+            <label className="label" htmlFor="r-doc_type_id">Tipo de documento</label>
+            <select id="r-doc_type_id" className="input" value={filters.doc_type_id} onChange={(e) => setField('doc_type_id', e.target.value)}>
               <option value="">Todos</option>
               {docTypes.map((dt) => <option key={dt.id} value={dt.id}>{dt.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Auxiliar</label>
-            <select className="input text-xs" value={filters.user_id} onChange={(e) => setField('user_id', e.target.value)}>
+            <label className="label" htmlFor="r-user_id">Auxiliar</label>
+            <select id="r-user_id" className="input" value={filters.user_id} onChange={(e) => setField('user_id', e.target.value)}>
               <option value="">Todos</option>
               {auxiliares.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Desde</label>
-            <input type="date" className="input text-xs" value={filters.date_from} onChange={(e) => setField('date_from', e.target.value)} />
+            <label className="label" htmlFor="r-date_from">Desde</label>
+            <input type="date" id="r-date_from" className="input" value={filters.date_from} onChange={(e) => setField('date_from', e.target.value)} />
           </div>
           <div>
-            <label className="label">Hasta</label>
-            <input type="date" className="input text-xs" value={filters.date_to} onChange={(e) => setField('date_to', e.target.value)} />
+            <label className="label" htmlFor="r-date_to">Hasta</label>
+            <input type="date" id="r-date_to" className="input" value={filters.date_to} onChange={(e) => setField('date_to', e.target.value)} />
           </div>
           <div>
-            <label className="label">Revisión</label>
-            <select className="input text-xs" value={filters.reviewed} onChange={(e) => setField('reviewed', e.target.value)}>
+            <label className="label" htmlFor="r-reviewed">Revisión</label>
+            <select id="r-reviewed" className="input" value={filters.reviewed} onChange={(e) => setField('reviewed', e.target.value)}>
               <option value="">Todos</option>
               <option value="true">Revisados</option>
               <option value="false">Sin revisar</option>
             </select>
           </div>
         </div>
-        <div className="flex items-center gap-2 mt-3">
-          <button type="submit" className="btn-primary text-xs" disabled={loadingStats}>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button type="submit" className="btn-primary" disabled={loadingStats}>
             {loadingStats ? 'Cargando…' : 'Aplicar filtros'}
           </button>
-          <button type="button" className="btn-secondary text-xs" onClick={handleClear} disabled={loadingStats}>
-            Limpiar
+          <button type="button" className="btn-ghost" onClick={handleClear} disabled={loadingStats}>
+            Quitar filtros
           </button>
           <button
             type="button"
             onClick={handleDownload}
             disabled={loadingExcel || loadingStats}
-            className="ml-auto flex items-center gap-1.5 text-xs bg-green-600 hover:bg-green-700 text-white font-medium px-3 py-2 rounded-lg transition-colors disabled:opacity-50"
+            className="btn-secondary sm:ml-auto"
+            aria-busy={loadingExcel || undefined}
           >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            {loadingExcel ? 'Generando…' : 'Exportar Excel'}
+            {loadingExcel ? <Spinner /> : <Icon name="descargar" size={18} />}
+            {loadingExcel ? 'Preparando Excel…' : 'Descargar en Excel'}
           </button>
         </div>
       </form>
 
       {/* ── Loader ── */}
       {loadingStats && (
-        <div className="flex justify-center items-center h-52">
-          <div className="animate-spin w-9 h-9 border-4 border-jal-blue-200 border-t-jal-blue-600 rounded-full" />
-        </div>
+        <p role="status" className="flex h-52 items-center justify-center gap-2 text-ink-muted">
+          <Spinner />Calculando cifras…
+        </p>
       )}
 
       {/* ── Dashboard ── */}
       {!loadingStats && stats && (
-        <div className="space-y-5">
+        <div className="space-y-6">
 
-          {/* Tarjetas resumen */}
-          <div className="grid grid-cols-3 gap-4">
-            <StatCard label="Total documentos"      value={stats.total}    color="text-jal-blue-600" />
-            <StatCard label="Revisados"             value={stats.reviewed} sub={`${pct}% del total`} color="text-green-600" />
-            <StatCard label="Pendientes de revisión" value={stats.pending}  color="text-amber-500" />
-          </div>
+          <dl className="grid gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-3">
+            <Figure label="Documentos" value={stats.total} sub="Con los filtros aplicados" />
+            <Figure label="Revisados" value={stats.reviewed} sub={`${pct} % del total`} />
+            <Figure label="Por revisar" value={stats.pending} sub="Esperan revisión de un edil" />
+          </dl>
 
           {stats.total === 0 ? (
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm py-16 text-center text-sm text-gray-400">
-              No hay documentos para los filtros seleccionados.
-            </div>
+            <EmptyState title="Sin documentos" message="Ningún documento coincide con estos filtros. Prueba con otras fechas o quita los filtros." />
           ) : (
             <>
               {/* Fila 1: donut + tipos */}
@@ -230,8 +238,8 @@ export default function ReportsPage() {
                         label={({ percent }) => `${Math.round(percent * 100)}%`}
                         labelLine={false}
                       >
-                        <Cell fill="#22c55e" />
-                        <Cell fill="#f59e0b" />
+                        <Cell fill={C.reviewed} />
+                        <Cell fill={C.pending} />
                       </Pie>
                       <Tooltip content={<CustomTooltip />} />
                       <Legend content={<CustomPieLegend />} />
@@ -248,19 +256,19 @@ export default function ReportsPage() {
                         data={stats.byType}
                         margin={{ top: 0, right: 24, left: 4, bottom: 0 }}
                       >
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                        <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.grid} />
+                        <XAxis type="number" tick={TICK} allowDecimals={false} />
                         <YAxis
                           type="category"
                           dataKey="name"
                           width={140}
-                          tick={{ fontSize: 10 }}
+                          tick={TICK}
                           tickFormatter={(v) => v.length > 20 ? `${v.slice(0, 19)}…` : v}
                         />
                         <Tooltip content={<CustomTooltip />} />
-                        <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                        <Bar dataKey="reviewed" name="Revisados"  stackId="a" fill="#22c55e" />
-                        <Bar dataKey="pending"  name="Pendientes" stackId="a" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                        <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: 14 }} />
+                        <Bar dataKey="reviewed" name="Revisados"  stackId="a" fill={C.reviewed} />
+                        <Bar dataKey="pending"  name="Pendientes" stackId="a" fill={C.pending} radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -274,30 +282,30 @@ export default function ReportsPage() {
                     <AreaChart data={stats.byDay} margin={{ top: 4, right: 16, left: -8, bottom: 0 }}>
                       <defs>
                         <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%"  stopColor="#1e4d8c" stopOpacity={0.18} />
-                          <stop offset="95%" stopColor="#1e4d8c" stopOpacity={0} />
+                          <stop offset="5%"  stopColor={C.brand} stopOpacity={0.18} />
+                          <stop offset="95%" stopColor={C.brand} stopOpacity={0} />
                         </linearGradient>
                       </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.grid} />
                       <XAxis
                         dataKey="date"
-                        tick={{ fontSize: 10 }}
+                        tick={TICK}
                         tickFormatter={(d) => {
                           const [, m, day] = d.split('-');
                           return `${day}/${m}`;
                         }}
                         interval="preserveStartEnd"
                       />
-                      <YAxis tick={{ fontSize: 10 }} allowDecimals={false} width={28} />
+                      <YAxis tick={TICK} allowDecimals={false} width={28} />
                       <Tooltip content={<CustomTooltip />} />
                       <Area
                         type="monotone"
                         dataKey="count"
                         name="Documentos"
-                        stroke="#1e4d8c"
+                        stroke={C.brand}
                         strokeWidth={2}
                         fill="url(#areaGrad)"
-                        dot={stats.byDay.length <= 20 ? { r: 3, fill: '#1e4d8c' } : false}
+                        dot={stats.byDay.length <= 20 ? { r: 3, fill: C.brand } : false}
                         activeDot={{ r: 5 }}
                       />
                     </AreaChart>
@@ -314,20 +322,17 @@ export default function ReportsPage() {
                       data={stats.byUser}
                       margin={{ top: 0, right: 24, left: 4, bottom: 0 }}
                     >
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                      <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={C.grid} />
+                      <XAxis type="number" tick={TICK} allowDecimals={false} />
                       <YAxis
                         type="category"
                         dataKey="name"
                         width={150}
-                        tick={{ fontSize: 10 }}
+                        tick={TICK}
                         tickFormatter={(v) => v.length > 22 ? `${v.slice(0, 21)}…` : v}
                       />
                       <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="total" name="Documentos" radius={[0, 4, 4, 0]}>
-                        {stats.byUser.map((_, i) => (
-                          <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                        ))}
+                      <Bar dataKey="total" name="Documentos" radius={[0, 4, 4, 0]} fill={C.brand}>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -337,7 +342,7 @@ export default function ReportsPage() {
               {/* Solo un auxiliar */}
               {stats.byUser.length === 1 && (
                 <ChartCard title="Auxiliar" minH={60}>
-                  <p className="text-sm text-gray-600 py-2">
+                  <p className="py-2 text-ink-muted">
                     <strong>{stats.byUser[0].name}</strong> — {stats.byUser[0].total} documento(s)
                   </p>
                 </ChartCard>

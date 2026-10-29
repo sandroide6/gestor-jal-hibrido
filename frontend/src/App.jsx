@@ -2,8 +2,6 @@ import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
 import RoleGuard from './components/ui/RoleGuard';
-import OfflineBanner from './components/ui/OfflineBanner';
-import ServerStatusBanner from './components/ui/ServerStatusBanner';
 import UpdatePrompt from './components/ui/UpdatePrompt';
 import InstallPrompt from './components/ui/InstallPrompt';
 import ToastContainer from './components/ui/ToastContainer';
@@ -40,10 +38,11 @@ const JalConfigPage = lazy(() => import('./pages/JalConfigPage'));
 const BackupPage    = lazy(() => import('./pages/BackupPage'));
 const HelpPage      = lazy(() => import('./pages/HelpPage'));
 
+// Mientras llega el código de una pantalla: mensaje discreto, sin destellos.
 function PageLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-sm text-gray-400">Cargando…</div>
+    <div role="status" className="min-h-screen flex items-center justify-center bg-bg text-ink-muted">
+      Cargando…
     </div>
   );
 }
@@ -52,18 +51,10 @@ export default function App() {
   const { isAuthenticated, loading } = useAuthStore();
   useServerHealthPolling();
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-sm text-gray-400">Cargando…</div>
-      </div>
-    );
-  }
+  if (loading) return <PageLoader />;
 
   return (
     <>
-      <OfflineBanner />
-      <ServerStatusBanner />
       <UpdatePrompt />
       <InstallPrompt />
       <ToastContainer />

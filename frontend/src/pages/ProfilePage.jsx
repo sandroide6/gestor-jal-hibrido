@@ -8,6 +8,10 @@ import { ROLE_LABEL } from '../constants';
 import TwoFactorSection from '../components/ui/TwoFactorSection';
 import { formatDateLong } from '../utils/format';
 import { SkeletonCard } from '../components/ui/Skeleton';
+import Notice from '../components/ui/Notice';
+import Spinner from '../components/ui/Spinner';
+import Icon from '../components/ui/Icon';
+import { ConfirmDialog } from '../components/ui/Dialog';
 
 export default function ProfilePage() {
   const { token, user, setToken, logout } = useAuthStore();
@@ -17,6 +21,7 @@ export default function ProfilePage() {
   const [firmaUrl, setFirmaUrl] = useState(null);
   const [uploadingFirma, setUploadingFirma] = useState(false);
   const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [confirm, setConfirm] = useState(null); // 'firma' | 'sesiones'
   const fileRef = useRef();
 
   const {
@@ -80,21 +85,35 @@ export default function ProfilePage() {
   }
 
   async function handleDeleteFirma() {
-    if (!confirm('¿Eliminar la firma guardada?')) return;
+    setConfirm(null);
     try {
       await deleteFirma(token);
       setProfile((p) => ({ ...p, has_firma: false }));
       setFirmaUrl(null);
-      flash('ok', 'Firma eliminada');
+      flash('ok', 'Firma eliminada.');
     } catch (err) {
       flash('err', err.message || 'Error al eliminar');
     }
   }
 
+  async function handleLogoutAll() {
+    setLoggingOutAll(true);
+    try {
+      await api.post('/auth/logout-all', {}, { token });
+      await logout();
+    } catch (err) {
+      setConfirm(null);
+      flash('err', err.message || 'Error al cerrar sesiones');
+      setLoggingOutAll(false);
+    }
+  }
+
+  const layout = { title: 'Mi perfil', eyebrow: 'Cuenta', description: 'Tus datos, tu firma y la seguridad de tu cuenta.' };
+
   if (loading) {
     return (
-      <AppLayout title="Mi Perfil">
-        <div className="max-w-2xl space-y-4">
+      <AppLayout {...layout}>
+        <div className="space-y-6" role="status" aria-label="Cargando perfil">
           <SkeletonCard rows={4} />
           <SkeletonCard rows={3} />
         </div>
@@ -103,120 +122,87 @@ export default function ProfilePage() {
   }
 
   return (
-    <AppLayout title="Mi Perfil">
-      <div className="max-w-2xl mx-auto space-y-6">
-
+    <AppLayout {...layout}>
+      <div className="space-y-8">
         {msg && (
-          <div className={`text-sm px-4 py-3 rounded-lg ${
-            msg.type === 'ok' ? 'bg-green-50 text-green-700 border border-green-200'
-                              : 'bg-red-50 text-red-700 border border-red-200'
-          }`}>
-            {msg.text}
-          </div>
+          <Notice tone={msg.type === 'ok' ? 'success' : 'danger'}>{msg.text}</Notice>
         )}
 
-        {/* Datos básicos */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-4">Datos básicos</h2>
+        <section className="card" aria-labelledby="titulo-datos">
+          <h2 id="titulo-datos" className="title-section mb-4">Datos básicos</h2>
 
-          {/* Rol y JAL (solo lectura) */}
-          <div className="grid grid-cols-2 gap-4 mb-5 p-3 bg-gray-50 rounded-lg">
+          <dl className="mb-6 grid gap-4 rounded-md border border-line bg-sunken p-4 sm:grid-cols-3">
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">Rol</p>
-              <p className="text-sm font-medium text-gray-800">{ROLE_LABEL[profile?.role] || profile?.role}</p>
+              <dt className="text-sm text-ink-muted">Rol</dt>
+              <dd className="font-semibold">{ROLE_LABEL[profile?.role] || profile?.role}</dd>
             </div>
             <div>
-              <p className="text-xs text-gray-500 mb-0.5">JAL</p>
-              <p className="text-sm font-medium text-gray-800 truncate">{profile?.jal?.name || '—'}</p>
+              <dt className="text-sm text-ink-muted">JAL</dt>
+              <dd className="font-semibold">{profile?.jal?.name || '—'}</dd>
             </div>
-            <div className="col-span-2">
-              <p className="text-xs text-gray-500 mb-0.5">Miembro desde</p>
-              <p className="text-sm text-gray-700">
-                {formatDateLong(profile?.created_at)}
-              </p>
+            <div>
+              <dt className="text-sm text-ink-muted">Miembro desde</dt>
+              <dd>{formatDateLong(profile?.created_at)}</dd>
             </div>
-          </div>
+          </dl>
 
-          <form onSubmit={handleSubmit(onSave)} className="space-y-4">
+          <form onSubmit={handleSubmit(onSave)} className="space-y-5" noValidate>
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Nombre completo</label>
-              <input
-                type="text"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-jal-blue-500"
-                {...register('name', { required: 'El nombre es obligatorio' })}
-              />
-              {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name.message}</p>}
+              <label className="label" htmlFor="perfil-nombre">Nombre completo</label>
+              <input id="perfil-nombre" type="text" autoComplete="name" className="input"
+                aria-invalid={errors.name ? 'true' : undefined}
+                aria-describedby={errors.name ? 'perfil-nombre-error' : undefined}
+                {...register('name', { required: 'Escribe tu nombre completo.' })} />
+              {errors.name && <p id="perfil-nombre-error" className="field-error">{errors.name.message}</p>}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Correo electrónico</label>
-              <input
-                type="email"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-jal-blue-500"
+              <label className="label" htmlFor="perfil-correo">Correo electrónico</label>
+              <input id="perfil-correo" type="email" autoComplete="email" className="input"
+                aria-invalid={errors.email ? 'true' : undefined}
+                aria-describedby={errors.email ? 'perfil-correo-error' : undefined}
                 {...register('email', {
-                  required: 'El correo es obligatorio',
-                  pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Correo no válido' },
-                })}
-              />
-              {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email.message}</p>}
+                  required: 'Escribe tu correo.',
+                  pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: 'Revisa el correo: debe tener la forma nombre@dominio.com.' },
+                })} />
+              {errors.email && <p id="perfil-correo-error" className="field-error">{errors.email.message}</p>}
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Cargo en documentos
-                <span className="ml-1 text-gray-400 font-normal">(aparece en las plantillas)</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Ej: Presidente(a) de la JAL, Edil(a)"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-jal-blue-500"
-                {...register('cargo_titulo')}
-              />
+              <label className="label" htmlFor="perfil-cargo">Cargo en los documentos</label>
+              <p className="hint" id="perfil-cargo-hint">Aparece debajo de tu firma. Por ejemplo: Presidente(a) de la JAL, Edil(a).</p>
+              <input id="perfil-cargo" type="text" className="input" aria-describedby="perfil-cargo-hint" {...register('cargo_titulo')} />
             </div>
 
             <div className="flex justify-end">
-              <button
-                type="submit"
-                disabled={isSubmitting || !isDirty}
-                className="bg-jal-blue-500 text-white text-sm px-5 py-2 rounded-lg hover:bg-jal-blue-600 disabled:opacity-50 transition-colors"
-              >
+              <button type="submit" disabled={isSubmitting || !isDirty} className="btn-primary" aria-busy={isSubmitting || undefined}>
+                {isSubmitting && <Spinner />}
                 {isSubmitting ? 'Guardando…' : 'Guardar cambios'}
               </button>
             </div>
           </form>
-        </div>
+        </section>
 
-        {/* Firma */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-1">Firma digital</h2>
-          <p className="text-xs text-gray-500 mb-4">
-            Se incrusta automáticamente en los PDF generados. Sube una imagen PNG o JPG de tu firma sobre fondo blanco.
+        <section className="card" aria-labelledby="titulo-firma">
+          <h2 id="titulo-firma" className="title-section mb-1">Firma</h2>
+          <p className="mb-5 max-w-prose text-ink-muted">
+            Se pone sola en los PDF que crees. Sube una foto o imagen de tu firma sobre fondo blanco, en PNG o JPG (máximo 5 MB).
           </p>
 
           {profile?.has_firma ? (
-            <div className="space-y-3">
-              <div className="border border-gray-200 rounded-lg p-4 bg-gray-50 flex items-center justify-center min-h-[80px]">
-                {firmaUrl && (
-                  <img
-                    src={firmaUrl}
-                    alt="Firma actual"
-                    className="max-h-20 max-w-full object-contain"
-                  />
-                )}
+            <div className="space-y-4">
+              <div className="flex min-h-[6rem] items-center justify-center rounded-sm border border-line bg-white p-4 shadow-sheet">
+                {firmaUrl
+                  ? <img src={firmaUrl} alt="Tu firma guardada" className="max-h-20 max-w-full object-contain" />
+                  : <span className="text-ink-muted">Cargando firma…</span>}
               </div>
               <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploadingFirma}
-                  className="flex-1 sm:flex-none text-sm bg-jal-blue-500 text-white px-4 py-2 rounded-lg hover:bg-jal-blue-600 disabled:opacity-50 transition-colors"
-                >
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={uploadingFirma} className="btn-secondary" aria-busy={uploadingFirma || undefined}>
+                  {uploadingFirma && <Spinner />}
                   {uploadingFirma ? 'Subiendo…' : 'Cambiar firma'}
                 </button>
-                <button
-                  onClick={handleDeleteFirma}
-                  className="flex-1 sm:flex-none text-sm border border-red-300 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  Eliminar
+                <button type="button" onClick={() => setConfirm('firma')} className="btn-danger-outline">
+                  Eliminar firma
                 </button>
               </div>
             </div>
@@ -225,56 +211,51 @@ export default function ProfilePage() {
               type="button"
               onClick={() => fileRef.current?.click()}
               disabled={uploadingFirma}
-              className="w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-jal-blue-400 hover:bg-blue-50/30 focus:outline-none focus:ring-2 focus:ring-jal-blue-400 transition-colors"
+              className="flex w-full flex-col items-center gap-2 rounded-lg border-2 border-dashed border-line-control bg-bg p-8 text-center hover:border-brand hover:bg-brand-tint"
             >
-              <div className="text-3xl mb-2 text-gray-400 select-none">✍</div>
-              <p className="text-sm text-gray-600 font-medium">
-                {uploadingFirma ? 'Subiendo…' : 'Haz clic para subir tu firma'}
-              </p>
-              <p className="text-sm text-gray-500 mt-1">Una foto o imagen de tu firma, en PNG o JPG (máx. 5 MB)</p>
+              <Icon name="firma" size={32} className="text-brand" />
+              <span className="font-semibold text-brand">{uploadingFirma ? 'Subiendo…' : 'Subir mi firma'}</span>
+              <span className="text-ink-muted">Elige la imagen desde tu equipo o celular</span>
             </button>
           )}
 
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/png,image/jpeg"
-            className="hidden"
-            onChange={handleFirmaChange}
-          />
-        </div>
+          <input ref={fileRef} type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleFirmaChange} aria-label="Archivo de firma" />
+        </section>
 
-        {/* Verificación en dos pasos */}
         <TwoFactorSection token={token} onFlash={flash} />
 
-        {/* Seguridad — sesiones */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-1">Sesiones activas</h2>
-          <p className="text-xs text-gray-500 mb-4">
-            Cierra todas las sesiones abiertas en otros dispositivos o navegadores.
-            Tu sesión actual también se cerrará.
+        <section className="card" aria-labelledby="titulo-sesiones">
+          <h2 id="titulo-sesiones" className="title-section mb-1">Sesiones abiertas</h2>
+          <p className="mb-5 max-w-prose text-ink-muted">
+            Si usaste la cuenta en un equipo ajeno o perdiste el celular, cierra la sesión en todos los dispositivos. También se cerrará aquí.
           </p>
-          <button
-            type="button"
-            disabled={loggingOutAll}
-            className="border border-red-300 text-red-600 text-sm px-4 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50 transition-colors"
-            onClick={async () => {
-              if (!confirm('¿Cerrar sesión en todos los dispositivos? Deberás iniciar sesión de nuevo.')) return;
-              setLoggingOutAll(true);
-              try {
-                await api.post('/auth/logout-all', {}, { token });
-                await logout();
-              } catch (err) {
-                flash('err', err.message || 'Error al cerrar sesiones');
-                setLoggingOutAll(false);
-              }
-            }}
-          >
-            {loggingOutAll ? 'Cerrando sesiones…' : 'Cerrar sesión en todos los dispositivos'}
+          <button type="button" disabled={loggingOutAll} className="btn-danger-outline" onClick={() => setConfirm('sesiones')}>
+            Cerrar sesión en todos los dispositivos
           </button>
-        </div>
-
+        </section>
       </div>
+
+      {confirm === 'firma' && (
+        <ConfirmDialog
+          danger
+          title="¿Eliminar tu firma?"
+          message="Los documentos que crees desde ahora no la llevarán hasta que subas otra. Los ya creados no cambian."
+          confirmLabel="Eliminar firma"
+          onConfirm={handleDeleteFirma}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'sesiones' && (
+        <ConfirmDialog
+          danger
+          busy={loggingOutAll}
+          title="¿Cerrar sesión en todos los dispositivos?"
+          message="Tendrás que volver a iniciar sesión en este equipo y en los demás."
+          confirmLabel={loggingOutAll ? 'Cerrando sesiones…' : 'Cerrar todas'}
+          onConfirm={handleLogoutAll}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
     </AppLayout>
   );
 }

@@ -2,6 +2,8 @@ import PropTypes from 'prop-types';
 import { Link } from 'react-router-dom';
 import AppLayout from '../components/ui/AppLayout';
 import { useAuthStore } from '../stores/authStore';
+import Icon from '../components/ui/Icon';
+import Notice from '../components/ui/Notice';
 
 // Guías cortas, en el orden en que las necesita alguien que empieza.
 // `roles` limita la guía a quien puede hacer esa tarea; sin `roles`, la ven todos.
@@ -14,7 +16,7 @@ const GUIDES = [
     steps: [
       'Abre la página del Gestor JAL en el navegador (Chrome, Edge o el del celular).',
       'Escribe tu correo y tu contraseña. Te los da el administrador de la JAL.',
-      'Si el computador es tuyo, marca «Recordarme en este dispositivo» para no escribirlos cada vez.',
+      'Si el computador es tuyo, marca «Recordarme en este equipo» para no escribirlos cada vez.',
       'Toca «Iniciar sesión». La primera vez te pedirá aceptar la política de privacidad.',
     ],
     tip: 'Si el sistema llevaba un rato sin uso, puede tardar hasta un minuto en abrir. Espera: la página lo intenta sola.',
@@ -25,19 +27,19 @@ const GUIDES = [
     img: 'firma.webp',
     steps: [
       'Firma en una hoja blanca y tómale una foto bien derecha, o escanéala.',
-      'Toca tu nombre en el menú (abajo a la izquierda en el computador) › «Mi perfil y firma».',
-      'Toca «Haz clic para subir tu firma» y elige la foto.',
+      'En el computador, toca tu nombre abajo a la izquierda › «Mi perfil y firma». En el celular, toca «Menú» abajo a la derecha.',
+      'Toca «Subir mi firma» y elige la foto.',
       'Listo. La firma sale sola en los documentos que se hacen a tu nombre.',
     ],
-    tip: 'Si te sale el aviso amarillo «Antes de crear tu primer documento: registra tu firma», es que falta este paso.',
+    tip: 'Si en Inicio te sale el aviso amarillo «Antes de crear tu primer documento, registra tu firma», es que falta este paso.',
   },
   {
     id: 'crear',
     title: 'Crear un documento',
     img: 'formulario.webp',
     steps: [
-      'En «Inicio» o en «Crear documento», toca el documento que necesitas (por ejemplo, Certificado de Residencia).',
-      'Escribe los datos de la persona. Los que tienen * rojo son obligatorios.',
+      'En «Inicio» o en «Crear documento», toca la ficha del documento que necesitas (por ejemplo, Certificado de Residencia).',
+      'Escribe los datos de la persona. Los que tienen * son obligatorios. Arriba ves en qué paso vas: Documento, Datos, Revisión y Listo.',
       'Toca «Revisar antes de crear». Si algo falta, el campo se pone en rojo y te dice qué corregir.',
       'Lee el resumen con calma. Si todo está bien, toca «Sí, crear el documento». Si no, «Corregir datos».',
       'Toca «Descargar PDF (para imprimir)» o «Descargar Word (para editar)».',
@@ -59,7 +61,7 @@ const GUIDES = [
     title: 'Volver a descargar o imprimir un documento',
     steps: [
       'Entra a «Inicio» y baja hasta «Mis documentos recientes».',
-      'Busca el documento por el nombre de la persona y toca «PDF» o «Word».',
+      'Busca el documento por la fecha o el nombre de la persona y toca «PDF» o «Word».',
     ],
   },
   {
@@ -81,9 +83,9 @@ const GUIDES = [
     img: 'buscar.webp',
     steps: [
       'Entra a «Buscar documentos».',
-      'Escribe el nombre o la cédula en «Beneficiario o cédula», o el número de radicado, y toca «Buscar».',
-      'Para ver solo lo que falta revisar, en «Estado revisión» elige «Pendiente revisión».',
-      'Abre el PDF para leerlo y, si está bien, toca «✓ Revisar».',
+      'Escribe el nombre o la cédula en «Nombre o cédula de la persona» y toca «Buscar». Para buscar por radicado, tipo o fechas, toca «Más filtros».',
+      'Para ver solo lo que falta revisar, toca «Solo pendientes» arriba a la derecha.',
+      'Abre el PDF para leerlo y, si está bien, toca «Revisado».',
     ],
     tip: 'La campana de arriba te avisa cuando hay documentos nuevos a tu nombre.',
   },
@@ -93,7 +95,7 @@ const GUIDES = [
     roles: ['edil', 'administrador'],
     steps: [
       'Entra a «Reportes». Ves cuántos documentos se han hecho, por tipo y por día.',
-      'Usa los filtros de arriba y toca «Aplicar filtros». «Exportar Excel» descarga la lista.',
+      'Usa los filtros de arriba y toca «Aplicar filtros». «Descargar en Excel» descarga la lista.',
     ],
   },
   {
@@ -102,10 +104,10 @@ const GUIDES = [
     roles: ['administrador'],
     img: 'nuevo-usuario.webp',
     steps: [
-      'Entra a «Usuarios» y toca «+ Nuevo usuario».',
+      'Entra a «Usuarios» y toca «Nuevo usuario».',
       'Escribe nombre, correo y una contraseña temporal de al menos 8 caracteres.',
       'Elige el rol: Auxiliar (hace documentos), Edil (los hace y los revisa) o Administrador (todo).',
-      'Toca «Guardar» y entrégale el correo y la contraseña en persona. Pídele que la cambie al entrar.',
+      'Toca «Crear usuario» y entrégale el correo y la contraseña en persona. Pídele que la cambie al entrar.',
     ],
     tip: 'Cuando alguien deja la JAL, toca «Desactivar». Sus documentos se conservan.',
   },
@@ -124,7 +126,7 @@ const GUIDES = [
     id: 'cuenta',
     title: 'Cambiar tu contraseña y proteger tu cuenta',
     steps: [
-      'Toca tu nombre en el menú (abajo a la izquierda en el computador) › «Cambiar contraseña».',
+      'En el computador, toca tu nombre abajo a la izquierda › «Cambiar contraseña». En el celular, toca «Menú» abajo a la derecha.',
       'Para más seguridad, en «Mi perfil y firma» activa la «Verificación en dos pasos» con una app como Google Authenticator.',
       'Si usas un computador prestado, cierra sesión al terminar.',
     ],
@@ -134,9 +136,9 @@ const GUIDES = [
     title: 'Usarlo en el celular o sin internet',
     img: 'celular.webp',
     steps: [
-      'Abre la misma página en el celular. El menú está en el botón ☰ de arriba a la izquierda.',
+      'Abre la misma página en el celular. Abajo tienes Inicio, Crear y Buscar (o Ayuda); el resto está en «Menú».',
       'Si aparece «Instalar», tócalo: queda como una app en la pantalla de inicio.',
-      'Sin internet puedes crear documentos y descargarlos. Se envían al sistema cuando vuelve la conexión.',
+      'Sin internet puedes crear documentos y descargarlos. Arriba verás «Sin conexión · N por enviar»; se envían solos cuando vuelve la conexión.',
     ],
   },
 ];
@@ -149,27 +151,25 @@ const FAQ = [
   ['Dice «Demasiadas solicitudes».', 'Espera un minuto y vuelve a intentarlo.'],
 ];
 
-function Guide({ guide }) {
+function Guide({ guide, index }) {
   return (
-    <details id={guide.id} className="card !p-0 group scroll-mt-20">
-      <summary className="cursor-pointer list-none flex items-center justify-between gap-3 p-5 min-h-[44px]
-                          text-lg font-semibold text-jal-blue-600 focus:outline-none focus:ring-2 focus:ring-jal-blue-400 rounded-xl">
-        <span>{guide.title}</span>
-        <span aria-hidden="true" className="text-2xl transition-transform group-open:rotate-90">›</span>
+    <details id={guide.id} className="group scroll-mt-20 rounded-lg border border-line bg-surface open:shadow-sheet">
+      <summary className="flex min-h-[3.5rem] cursor-pointer list-none items-center gap-4 rounded-lg px-5 py-4 hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <span aria-hidden="true" className="font-mono text-sm text-accent">{String(index + 1).padStart(2, '0')}</span>
+        <span className="flex-1 font-serif text-lg font-semibold text-ink">{guide.title}</span>
+        <Icon name="chevron" className="help-chevron text-ink-muted group-open:rotate-90" />
       </summary>
-      <div className="px-5 pb-5 space-y-4">
-        <ol className="list-decimal pl-6 space-y-2 text-gray-800">
-          {guide.steps.map((s) => <li key={s}>{s}</li>)}
+      <div className="space-y-4 border-t border-line px-5 pb-5 pt-4">
+        <ol className="list-decimal space-y-2 pl-6 text-ink marker:font-semibold marker:text-brand">
+          {guide.steps.map((s) => <li key={s} className="pl-1">{s}</li>)}
         </ol>
-        {guide.tip && (
-          <p className="bg-jal-blue-50 border border-jal-blue-200 rounded-lg px-4 py-3 text-gray-900">{guide.tip}</p>
-        )}
+        {guide.tip && <Notice tone="info">{guide.tip}</Notice>}
         {guide.img && (
           <img
             src={`/ayuda/${guide.img}`}
             alt={`Ejemplo en pantalla: ${guide.title}`}
             loading="lazy"
-            className="block max-w-full h-auto rounded-lg border border-gray-200"
+            className="block h-auto max-w-full rounded-md border border-line"
           />
         )}
       </div>
@@ -185,6 +185,7 @@ Guide.propTypes = {
     tip: PropTypes.string,
     img: PropTypes.string,
   }).isRequired,
+  index: PropTypes.number.isRequired,
 };
 
 export default function HelpPage() {
@@ -192,30 +193,25 @@ export default function HelpPage() {
   const guides = GUIDES.filter((g) => !g.roles || g.roles.includes(user?.role));
 
   return (
-    <AppLayout title="Ayuda">
-      <div className="max-w-3xl space-y-8">
-        <section>
-          <h2 className="text-2xl font-bold text-gray-900">¿En qué te ayudamos?</h2>
-          <p className="text-gray-600 mt-1">
-            Toca un tema para ver los pasos. Las imágenes son de ejemplo, con datos de prueba.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link to="/generador" className="btn-primary">Crear un documento ahora</Link>
-            <Link to="/perfil" className="btn-secondary">Mi perfil y firma</Link>
-          </div>
-        </section>
-
+    <AppLayout
+      title="Ayuda"
+      eyebrow="Guías paso a paso"
+      heading="¿En qué te ayudamos?"
+      description="Toca un tema para ver los pasos. Las imágenes son de ejemplo, con datos de prueba."
+      actions={<Link to="/generador" className="btn-primary">Crear un documento ahora</Link>}
+    >
+      <div className="space-y-10">
         <section aria-label="Guías" className="space-y-3">
-          {guides.map((g) => <Guide key={g.id} guide={g} />)}
+          {guides.map((g, i) => <Guide key={g.id} guide={g} index={i} />)}
         </section>
 
         <section aria-labelledby="faq">
-          <h2 id="faq" className="text-xl font-bold text-gray-900 mb-3">Preguntas frecuentes</h2>
-          <dl className="card divide-y divide-gray-200 !py-0">
+          <h2 id="faq" className="title-section mb-3">Preguntas frecuentes</h2>
+          <dl className="divide-y divide-line rounded-lg border border-line bg-surface px-5">
             {FAQ.map(([q, a]) => (
               <div key={q} className="py-4">
-                <dt className="font-semibold text-gray-900">{q}</dt>
-                <dd className="text-gray-700 mt-1">{a}</dd>
+                <dt className="font-semibold text-ink">{q}</dt>
+                <dd className="mt-1 text-ink-muted">{a}</dd>
               </div>
             ))}
           </dl>

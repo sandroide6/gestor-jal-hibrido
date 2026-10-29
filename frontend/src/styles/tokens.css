@@ -1,0 +1,60 @@
+/*
+ * Tokens del sistema de diseño «El archivo vivo de la comunidad».
+ * Fuente de verdad del color, el movimiento y la forma. Cada variable tiene su
+ * par en Figma (colección «Tokens» / «Dimensiones»): docs/design/09-figma-y-entrega.md.
+ * Los colores van como canales RGB para que Tailwind pueda aplicar opacidad
+ * (`bg-brand/10`). Contrastes verificados en docs/design/02-sistema-de-diseno.md.
+ */
+:root {
+  /* Superficies */
+  --color-bg: 246 243 236;            /* #F6F3EC papel */
+  --color-surface: 255 255 255;       /* #FFFFFF */
+  --color-surface-sunken: 241 237 228;/* #F1EDE4 */
+
+  /* Texto */
+  --color-ink: 34 42 39;              /* #222A27 */
+  --color-ink-muted: 91 101 96;       /* #5B6560 — 5.5:1 sobre papel */
+  --color-on-brand: 255 255 255;
+
+  /* Líneas y bordes */
+  --color-line: 227 222 210;          /* #E3DED2 decorativa */
+  --color-line-strong: 207 201 187;   /* #CFC9BB */
+  --color-control-border: 125 134 129;/* #7D8681 — 3.8:1, borde de controles */
+
+  /* Marca */
+  --color-brand: 25 59 53;            /* #193B35 verde institucional */
+  --color-brand-hover: 18 48 42;      /* #12302A */
+  --color-brand-tint: 238 243 240;    /* #EEF3F0 */
+  --color-accent: 155 65 51;          /* #9B4133 terracota — 5.9:1 sobre papel */
+  --color-accent-tint: 250 240 236;   /* #FAF0EC */
+  --color-focus: 155 65 51;
+
+  /* Estados (fondo / texto / borde / sólido) */
+  --color-success-bg: 231 241 234;  --color-success-fg: 30 82 53;   --color-success-border: 169 205 180; --color-success: 46 107 74;
+  --color-warning-bg: 251 241 220;  --color-warning-fg: 122 78 0;   --color-warning-border: 232 201 122; --color-warning: 176 122 18;
+  --color-danger-bg: 251 233 230;   --color-danger-fg: 142 43 36;   --color-danger-border: 229 178 170;  --color-danger: 163 51 43;
+  --color-info-bg: 230 239 244;     --color-info-fg: 35 74 99;      --color-info-border: 169 196 214;    --color-info: 43 88 118;
+
+  /* Forma */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-tab: 12px;
+  --shadow-sheet: 0 8px 24px -8px rgb(25 59 53 / 0.18);
+  --shadow-float: 0 16px 40px -12px rgb(25 59 53 / 0.32);
+
+  /* Movimiento — ver docs/design/06-motion-y-animaciones.md */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-press: 140ms;
+  --dur-fast: 160ms;
+  --dur-base: 200ms;
+  --dur-enter: 240ms;
+  --dur-drawer: 280ms;
+
+  /* Tipografía */
+  --font-sans: 'Public Sans Variable', 'Public Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-serif: 'Source Serif 4 Variable', 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}

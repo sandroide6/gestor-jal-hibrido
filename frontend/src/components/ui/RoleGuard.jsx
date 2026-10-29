@@ -11,13 +11,14 @@ export default function RoleGuard({ children, requireAuth = false, roles = [] })
 
   if (roles.length > 0 && !hasRole(...roles)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-bg p-4">
         <div className="card max-w-md text-center">
-          <h2 className="text-lg font-semibold text-red-600 mb-2">Acceso restringido</h2>
-          <p className="text-sm text-gray-600">
-            No tienes permisos para acceder a esta sección.
+          <p className="eyebrow justify-center mb-2">Sin permiso</p>
+          <h2 className="title-section mb-2">Acceso restringido</h2>
+          <p className="text-ink-muted">
+            Tu usuario no tiene permiso para esta sección. Si lo necesitas, pídeselo al administrador de la JAL.
           </p>
-          <Link to="/inicio" className="btn-primary mt-4">Volver al inicio</Link>
+          <Link to="/inicio" className="btn-primary mt-5">Volver al inicio</Link>
         </div>
       </div>
     );

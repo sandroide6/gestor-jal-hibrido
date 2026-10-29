@@ -74,10 +74,19 @@ function validateField(field, rawValue) {
 
 // ── Input según tipo ──────────────────────────────────────
 
+// Campos donde el texto de ejemplo se muestra como ayuda fija bajo la etiqueta
+const HINT_TYPES = ['text', 'textarea', 'number', 'duracion', 'periodo'];
+const hasHint = (field) => !!field.placeholder && HINT_TYPES.includes(field.type);
+
+function describedBy(field, hasError) {
+  const ids = [hasHint(field) && `hint-${field.name}`, hasError && `err-${field.name}`].filter(Boolean);
+  return ids.length ? ids.join(' ') : undefined;
+}
+
 function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
-  const errCls = hasError ? ' border-red-400 ring-1 ring-red-300 focus:ring-red-300' : '';
-  const base   = `input${errCls}`;
+  const base   = 'input';
   const id     = field.name;
+  const described = describedBy(field, hasError);
 
   const common = {
     id,
@@ -85,8 +94,9 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
     onChange: (e) => onChange(field.name, e.target.value),
     onBlur,
     disabled,
+    required: field.required || undefined,
     'aria-invalid': hasError || undefined,
-    'aria-describedby': hasError ? `err-${id}` : undefined,
+    'aria-describedby': described,
   };
 
   switch (field.type) {
@@ -107,14 +117,13 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
         <div>
           <textarea
             {...common}
-            className={`input min-h-[80px] resize-y${errCls}`}
+            className="input min-h-[7rem] resize-y"
             maxLength={max}
-            rows={3}
-            placeholder={field.placeholder ?? ''}
+            rows={4}
           />
-          <div className="flex justify-end mt-0.5">
-            <span className={`text-sm ${len > max * 0.9 ? 'text-amber-700' : 'text-gray-500'}`}>
-              {len}/{max}
+          <div className="flex justify-end mt-1">
+            <span className={`text-sm ${len > max * 0.9 ? 'font-semibold text-warning-fg' : 'text-ink-muted'}`}>
+              {len} de {max} caracteres
             </span>
           </div>
         </div>
@@ -152,13 +161,12 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
           min={field.min ?? 0}
           max={field.max}
           step={field.step ?? 1}
-          placeholder={field.placeholder ?? ''}
         />
       );
 
     case 'checkbox':
       return (
-        <div className="flex items-center gap-2 mt-1">
+        <label htmlFor={id} className="flex min-h-[44px] cursor-pointer items-center gap-3 mt-1">
           <input
             type="checkbox"
             id={id}
@@ -166,26 +174,27 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
             onChange={(e) => onChange(field.name, e.target.checked ? 'Sí' : 'No')}
             onBlur={onBlur}
             disabled={disabled}
-            className="w-5 h-5 rounded accent-jal-blue-500"
+            className="w-5 h-5 rounded accent-brand"
             aria-invalid={hasError || undefined}
-            aria-describedby={hasError ? `err-${id}` : undefined}
+            aria-describedby={described}
           />
           {field.placeholder && (
-            <span className="text-gray-700">{field.placeholder}</span>
+            <span className="text-ink">{field.placeholder}</span>
           )}
-        </div>
+        </label>
       );
 
     case 'checklist': {
       const selected = value ? value.split(',').map(s => s.trim()).filter(Boolean) : [];
       return (
         <div
-          className={`space-y-1.5 mt-1${hasError ? ' ring-1 ring-red-300 rounded p-2' : ''}`}
+          className={`space-y-1 mt-1${hasError ? ' rounded-md border border-danger p-2' : ''}`}
           role="group"
-          aria-describedby={hasError ? `err-${id}` : undefined}
+          aria-labelledby={`label-${id}`}
+          aria-describedby={described}
         >
           {(field.options ?? []).map((opt) => (
-            <label key={opt} className="flex items-center gap-2 cursor-pointer">
+            <label key={opt} className="flex min-h-[44px] items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={selected.includes(opt)}
@@ -197,9 +206,9 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
                   onBlur();
                 }}
                 disabled={disabled}
-                className="w-5 h-5 rounded accent-jal-blue-500"
+                className="w-5 h-5 rounded accent-brand"
               />
-              <span className="text-gray-800">{opt}</span>
+              <span className="text-ink">{opt}</span>
             </label>
           ))}
         </div>
@@ -218,14 +227,13 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
             type="number"
             min={1}
             step={1}
-            className={`input w-28 ${hasError ? 'border-red-400 ring-1 ring-red-300' : ''}`}
+            className="input w-28"
             value={numVal}
             onChange={(e) => emitDuracion(e.target.value, unit)}
             onBlur={onBlur}
             disabled={disabled}
-            placeholder="0"
             aria-invalid={hasError || undefined}
-            aria-describedby={hasError ? `err-${id}` : undefined}
+            aria-describedby={described}
           />
           <select
             className="input flex-1"
@@ -233,6 +241,7 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
             onChange={(e) => emitDuracion(numVal, e.target.value)}
             onBlur={onBlur}
             disabled={disabled}
+            aria-label={`${field.label}: unidad`}
           >
             <option value="meses">meses</option>
             <option value="años">años</option>
@@ -245,7 +254,6 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
       const parts = String(value ?? '').split('-');
       const anio  = parts[0] ?? '';
       const sem   = parts[1] ?? '';
-      const errCls = hasError ? ' border-red-400 ring-1 ring-red-300' : '';
       const emitPeriodo = (a, s) => onChange(field.name, `${a}-${s}`);
       return (
         <div className="flex gap-2">
@@ -255,21 +263,23 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
             min={2000}
             max={2100}
             step={1}
-            className={`input w-32${errCls}`}
+            className="input w-32"
             value={anio}
             onChange={(e) => emitPeriodo(e.target.value, sem)}
             onBlur={onBlur}
             disabled={disabled}
-            placeholder={String(new Date().getFullYear())}
+            aria-label={`${field.label}: año`}
             aria-invalid={hasError || undefined}
-            aria-describedby={hasError ? `err-${id}` : undefined}
+            aria-describedby={described}
           />
           <select
-            className={`input flex-1${errCls}`}
+            className="input flex-1"
             value={sem}
             onChange={(e) => emitPeriodo(anio, e.target.value)}
             onBlur={onBlur}
             disabled={disabled}
+            aria-label={`${field.label}: semestre`}
+            aria-invalid={hasError || undefined}
           >
             <option value="">— Semestre —</option>
             <option value="1">Semestre 1</option>
@@ -291,7 +301,6 @@ function FieldInput({ field, value, onChange, onBlur, disabled, hasError }) {
           type="text"
           className={base}
           maxLength={field.maxLength ?? 500}
-          placeholder={field.placeholder ?? ''}
           onChange={(e) => onChange(field.name, applyFilter(e.target.value))}
           inputMode={field.inputFilter === 'solo_numeros' ? 'numeric' : undefined}
         />
@@ -332,6 +341,7 @@ export default function DynamicForm({
   disabled = false,
   submitAttempted = false,
   onErrorsChange,
+  sections,
 }) {
   const [touched, setTouched] = useState({});
 
@@ -354,37 +364,50 @@ export default function DynamicForm({
     setTouched((t) => ({ ...t, [name]: true }));
   }
 
+  function renderField(field) {
+    const err       = errors[field.name];
+    const showError = !!err && (touched[field.name] || submitAttempted);
+    return (
+      <div key={field.name}>
+        <label className="label" htmlFor={field.name} id={`label-${field.name}`}>
+          {field.label}
+          {field.required && <span className="text-danger-fg ml-1" aria-hidden="true">*</span>}
+          {field.required && <span className="sr-only"> (obligatorio)</span>}
+        </label>
+        {hasHint(field) && <span id={`hint-${field.name}`} className="hint">{field.placeholder}</span>}
+        <FieldInput
+          field={field}
+          value={values[field.name] ?? ''}
+          onChange={handleChange}
+          onBlur={() => handleBlur(field.name)}
+          disabled={disabled}
+          hasError={showError}
+        />
+        {showError && (
+          <p id={`err-${field.name}`} role="alert" className="field-error">
+            <svg aria-hidden="true" className="mt-0.5 h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            {err}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  if (!sections) {
+    return <div className="space-y-6">{fields.map(renderField)}</div>;
+  }
+
+  // Bloques con título (fieldset + legend): el lector de pantalla anuncia el grupo
   return (
-    <div className="space-y-4">
-      {fields.map((field) => {
-        const err       = errors[field.name];
-        const showError = !!err && (touched[field.name] || submitAttempted);
-        return (
-          <div key={field.name}>
-            <label className="label" htmlFor={field.name}>
-              {field.label}
-              {field.required && <span className="text-red-600 ml-1" aria-hidden="true">*</span>}
-              {field.required && <span className="sr-only"> (obligatorio)</span>}
-            </label>
-            <FieldInput
-              field={field}
-              value={values[field.name] ?? ''}
-              onChange={handleChange}
-              onBlur={() => handleBlur(field.name)}
-              disabled={disabled}
-              hasError={showError}
-            />
-            {showError && (
-              <p id={`err-${field.name}`} role="alert" className="text-sm text-red-700 mt-1 flex items-center gap-1">
-                <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                {err}
-              </p>
-            )}
-          </div>
-        );
-      })}
+    <div className="space-y-10">
+      {sections.map((sec) => (
+        <fieldset key={sec.title} className="space-y-6">
+          <legend className="fieldset-legend">{sec.title}</legend>
+          {fields.filter((f) => sec.names.includes(f.name)).map(renderField)}
+        </fieldset>
+      ))}
     </div>
   );
 }
@@ -396,4 +419,8 @@ DynamicForm.propTypes = {
   disabled:        PropTypes.bool,
   submitAttempted: PropTypes.bool,
   onErrorsChange:  PropTypes.func,
+  sections:        PropTypes.arrayOf(PropTypes.shape({
+    title: PropTypes.string.isRequired,
+    names: PropTypes.arrayOf(PropTypes.string).isRequired,
+  })),
 };

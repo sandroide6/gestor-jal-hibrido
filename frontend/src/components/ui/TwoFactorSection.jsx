@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { api } from '../../services/api';
+import StatusBadge from './StatusBadge';
+import Spinner from './Spinner';
 
 export default function TwoFactorSection({ token, onFlash }) {
   const [step, setStep]       = useState('idle'); // idle | setup | confirm | disable
@@ -56,96 +58,89 @@ export default function TwoFactorSection({ token, onFlash }) {
     } finally { setLoading(false); }
   }
 
+  const cancel = (
+    <button type="button" onClick={() => { setStep('idle'); setCode(''); }} className="btn-ghost">
+      Cancelar
+    </button>
+  );
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="text-base font-semibold text-gray-800">Verificación en dos pasos (2FA)</h2>
+    <section className="card" aria-labelledby="titulo-2fa">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h2 id="titulo-2fa" className="title-section">Verificación en dos pasos</h2>
         {enabled !== null && (
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            enabled ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-          }`}>
-            {enabled ? 'Activado' : 'Desactivado'}
-          </span>
+          <StatusBadge tone={enabled ? 'success' : 'neutral'}>{enabled ? 'Activada' : 'Desactivada'}</StatusBadge>
         )}
       </div>
-      <p className="text-xs text-gray-500 mb-4">
-        Añade una capa extra de seguridad. Al iniciar sesión necesitarás el código de tu app autenticadora (Google Authenticator, Authy).
+      <p className="mb-5 max-w-prose text-ink-muted">
+        Una protección extra: además de la contraseña, al entrar se pide un código de 6 números que genera una app del celular (Google Authenticator o Authy).
       </p>
 
-      {/* Estado: desactivado */}
       {step === 'idle' && !enabled && (
-        <button onClick={handleSetup} disabled={loading}
-          className="bg-jal-blue-500 text-white text-sm px-5 py-2 rounded-lg hover:bg-jal-blue-600 disabled:opacity-50 transition-colors">
-          {loading ? 'Generando…' : 'Activar 2FA'}
+        <button type="button" onClick={handleSetup} disabled={loading} className="btn-primary" aria-busy={loading || undefined}>
+          {loading && <Spinner />}
+          {loading ? 'Preparando…' : 'Activar verificación en dos pasos'}
         </button>
       )}
 
-      {/* Estado: activado */}
       {step === 'idle' && enabled && (
-        <button onClick={() => setStep('disable')}
-          className="border border-red-300 text-red-600 text-sm px-5 py-2 rounded-lg hover:bg-red-50 transition-colors">
-          Desactivar 2FA
+        <button type="button" onClick={() => setStep('disable')} className="btn-danger-outline">
+          Desactivar verificación en dos pasos
         </button>
       )}
 
-      {/* Paso 1: mostrar QR */}
       {step === 'setup' && (
-        <div className="space-y-4">
-          <p className="text-sm text-gray-700 font-medium">1. Escanea este código QR con tu app autenticadora:</p>
-          {qrCode && (
-            <div className="flex justify-center">
-              <img src={qrCode} alt="QR 2FA" className="w-48 h-48 border border-gray-200 rounded-lg p-2" />
-            </div>
-          )}
-          <details className="text-xs text-gray-500">
-            <summary className="cursor-pointer hover:text-gray-700">¿No puedes escanear? Ingresa el código manualmente</summary>
-            <p className="mt-2 font-mono bg-gray-50 border border-gray-200 rounded p-2 break-all select-all">{secret}</p>
-          </details>
-          <p className="text-sm text-gray-700 font-medium">2. Ingresa el código de 6 dígitos para confirmar:</p>
-          <form onSubmit={handleEnable} className="flex gap-2">
-            <input
-              type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono tracking-widest text-center w-36 focus:outline-none focus:ring-2 focus:ring-jal-blue-500"
-              placeholder="000000" value={code}
+        <ol className="space-y-5">
+          <li>
+            <p className="font-semibold">1. Escanea este código con la app del celular</p>
+            {qrCode && (
+              <img src={qrCode} alt="Código QR para configurar la verificación en dos pasos" className="mt-3 h-48 w-48 rounded-md border border-line bg-white p-2" />
+            )}
+            <details className="mt-3">
+              <summary className="link cursor-pointer">¿No puedes escanearlo? Escribe el código a mano</summary>
+              <p className="mt-2 select-all break-all rounded-md border border-line bg-sunken p-3 font-mono">{secret}</p>
+            </details>
+          </li>
+          <li>
+            <label htmlFor="codigo-activar" className="font-semibold">2. Escribe el código de 6 números que muestra la app</label>
+            <form onSubmit={handleEnable} className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+              id="codigo-activar" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6}
+              className="input w-40 text-center font-mono text-lg tracking-[0.3em]"
+              value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               autoFocus required
             />
-            <button type="submit" disabled={loading || code.length !== 6}
-              className="bg-jal-blue-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-jal-blue-600 disabled:opacity-50 transition-colors">
-              {loading ? 'Verificando…' : 'Confirmar y activar'}
-            </button>
-            <button type="button" onClick={() => { setStep('idle'); setCode(''); }}
-              className="text-sm text-gray-500 hover:text-gray-700 px-2">
-              Cancelar
-            </button>
-          </form>
-        </div>
+              <button type="submit" disabled={loading || code.length !== 6} className="btn-primary" aria-busy={loading || undefined}>
+                {loading && <Spinner />}
+                {loading ? 'Verificando…' : 'Confirmar y activar'}
+              </button>
+              {cancel}
+            </form>
+          </li>
+        </ol>
       )}
 
-      {/* Desactivar: pedir código */}
       {step === 'disable' && (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-700">Ingresa el código de tu app autenticadora para desactivar 2FA:</p>
-          <form onSubmit={handleDisable} className="flex gap-2">
+        <div>
+          <label htmlFor="codigo-desactivar" className="font-semibold">Para desactivarla, escribe el código que muestra la app</label>
+          <form onSubmit={handleDisable} className="mt-2 flex flex-wrap items-center gap-2">
             <input
-              type="text" inputMode="numeric" pattern="\d{6}" maxLength={6}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono tracking-widest text-center w-36 focus:outline-none focus:ring-2 focus:ring-red-400"
-              placeholder="000000" value={code}
+              id="codigo-desactivar" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6}
+              className="input w-40 text-center font-mono text-lg tracking-[0.3em]"
+              value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
               autoFocus required
             />
-            <button type="submit" disabled={loading || code.length !== 6}
-              className="bg-red-500 text-white text-sm px-4 py-2 rounded-lg hover:bg-red-600 disabled:opacity-50 transition-colors">
+            <button type="submit" disabled={loading || code.length !== 6} className="btn-danger" aria-busy={loading || undefined}>
+              {loading && <Spinner />}
               {loading ? 'Verificando…' : 'Desactivar'}
             </button>
-            <button type="button" onClick={() => { setStep('idle'); setCode(''); }}
-              className="text-sm text-gray-500 hover:text-gray-700 px-2">
-              Cancelar
-            </button>
+            {cancel}
           </form>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 TwoFactorSection.propTypes = {

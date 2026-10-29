@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Icon from './Icon';
 
 export default function UpdatePrompt() {
   const [ready, setReady] = useState(false);
@@ -10,30 +11,22 @@ export default function UpdatePrompt() {
   }, []);
 
   function handleUpdate() {
-    if (window.__pwaUpdateSW) {
-      window.__pwaUpdateSW(true);
-    } else {
-      window.location.reload();
-    }
+    if (window.__pwaUpdateSW) window.__pwaUpdateSW(true);
+    else window.location.reload();
   }
 
   if (!ready) return null;
 
   return (
-    <div
-      role="alert"
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] bg-jal-blue-500 text-white rounded-xl shadow-2xl px-5 py-4 flex items-center gap-4 w-[calc(100vw-2rem)] max-w-sm"
-    >
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold leading-tight">Nueva versión disponible</p>
-        <p className="text-xs text-blue-200 mt-0.5">Actualiza para obtener las últimas mejoras.</p>
+    <div className="pointer-events-none fixed inset-x-0 bottom-20 z-[60] flex justify-center px-3 lg:bottom-5">
+    <div role="status" className="anim-toast pointer-events-auto flex w-full max-w-md items-center gap-4 rounded-lg bg-brand px-5 py-4 text-white shadow-float">
+      <Icon name="descargar" />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold leading-tight">Hay una versión nueva</p>
+        <p className="text-[0.9375rem] text-white/85">Actualiza cuando termines lo que estás haciendo.</p>
       </div>
-      <button
-        onClick={handleUpdate}
-        className="text-xs bg-white text-jal-blue-500 font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors flex-shrink-0"
-      >
-        Actualizar
-      </button>
+      <button type="button" onClick={handleUpdate} className="btn btn-sm bg-white text-brand hover:bg-brand-tint">Actualizar</button>
+    </div>
     </div>
   );
 }

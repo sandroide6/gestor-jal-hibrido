@@ -1,53 +1,86 @@
 /** @type {import('tailwindcss').Config} */
+
+// Los colores salen de las variables CSS de src/styles/tokens.css.
+const token = (name) => `rgb(var(--color-${name}) / <alpha-value>)`;
+
+// Escala verde institucional. `jal.blue` es un alias heredado: las pantallas antiguas usan
+// `jal-blue-*` y ahora pintan en la misma escala que `brand-*`. Para código nuevo, usar `brand`.
+const verde = {
+  50: '#EEF3F0',
+  100: '#DCE7E1',
+  200: '#B9CEC3',
+  300: '#8FAF9F',
+  400: '#3F6B5D',
+  500: '#264F47',
+  600: '#193B35',
+  700: '#12302A',
+  800: '#0D2520',
+  900: '#081A16',
+};
+
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
-        // Colores institucionales JAL Comuna 12 — La América
+        bg: token('bg'),
+        surface: token('surface'),
+        sunken: token('surface-sunken'),
+        ink: { DEFAULT: token('ink'), muted: token('ink-muted') },
+        line: { DEFAULT: token('line'), strong: token('line-strong'), control: token('control-border') },
+        brand: { DEFAULT: token('brand'), hover: token('brand-hover'), tint: token('brand-tint'), ...verde },
+        accent: {
+          DEFAULT: token('accent'),
+          tint: token('accent-tint'),
+          50: '#FAF0EC', 100: '#F3DED6', 200: '#E6BCAE', 400: '#B5604D', 500: '#9B4133', 600: '#84362A', 700: '#6B2B22',
+        },
+        success: { DEFAULT: token('success'), bg: token('success-bg'), fg: token('success-fg'), border: token('success-border') },
+        warning: { DEFAULT: token('warning'), bg: token('warning-bg'), fg: token('warning-fg'), border: token('warning-border') },
+        danger:  { DEFAULT: token('danger'),  bg: token('danger-bg'),  fg: token('danger-fg'),  border: token('danger-border') },
+        info:    { DEFAULT: token('info'),    bg: token('info-bg'),    fg: token('info-fg'),    border: token('info-border') },
+        // Gris cálido: reemplaza el gris frío de Tailwind en todas las pantallas.
+        // 400 es el primer tono apto para texto (4.8:1 sobre blanco); 300 y menores, solo líneas y fondos.
+        gray: {
+          50: '#FAF8F3', 100: '#F1EDE4', 200: '#E3DED2', 300: '#CFC9BB', 400: '#6B746F',
+          500: '#5B6560', 600: '#4A534F', 700: '#38403C', 800: '#2A322E', 900: '#222A27',
+        },
         jal: {
-          blue: {
-            50: '#f0f7f1',
-            100: '#d4ecda',
-            200: '#a9d9b5',
-            300: '#7ec590',
-            400: '#53b16b',
-            500: '#1e6b3a', // verde primario institucional
-            600: '#196032',
-            700: '#145429',
-            800: '#0f4822',
-            900: '#0a3c1a',
-          },
-          gold: {
-            50: '#fffbeb',
-            100: '#fef3c7',
-            200: '#fde68a',
-            300: '#fcd34d',
-            400: '#fbbf24',
-            500: '#d4a017', // dorado institucional
-            600: '#b78400',
-            700: '#956800',
-            800: '#734f00',
-            900: '#523800',
-          },
-          green: {
-            500: '#16a34a', // estado: sincronizado
-            600: '#15803d',
-          },
-          red: {
-            500: '#dc2626', // estado: error
-            600: '#b91c1c',
-          },
-          amber: {
-            500: '#d97706', // estado: pendiente
-          },
+          blue: verde,
+          gold: { 50: '#FAF0EC', 100: '#F3DED6', 500: '#9B4133', 600: '#84362A', 700: '#6B2B22' },
         },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-sans)'],
+        serif: ['var(--font-serif)'],
+        mono: ['var(--font-mono)'],
+      },
+      fontSize: {
+        eyebrow: ['0.75rem', { lineHeight: '1rem', letterSpacing: '0.08em', fontWeight: '700' }],
+      },
+      borderRadius: {
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        tab: 'var(--radius-tab)',
       },
       boxShadow: {
-        card: '0 1px 3px 0 rgba(30, 107, 58, 0.1), 0 1px 2px -1px rgba(30, 107, 58, 0.1)',
+        card: 'none',
+        sheet: 'var(--shadow-sheet)',
+        float: 'var(--shadow-float)',
+      },
+      transitionTimingFunction: {
+        out: 'var(--ease-out)',
+        'in-out': 'var(--ease-in-out)',
+        drawer: 'var(--ease-drawer)',
+      },
+      transitionDuration: {
+        press: 'var(--dur-press)',
+        fast: 'var(--dur-fast)',
+        base: 'var(--dur-base)',
+      },
+      maxWidth: {
+        prose: '68ch',
+        page: '72rem',
       },
     },
   },

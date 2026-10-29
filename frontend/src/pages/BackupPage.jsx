@@ -2,6 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '../components/ui/AppLayout';
 import { backupService } from '../services/backupService';
 import { useAuthStore } from '../stores/authStore';
+import PropTypes from 'prop-types';
+import { toast } from '../stores/toastStore';
+import { ConfirmDialog } from '../components/ui/Dialog';
+import Notice from '../components/ui/Notice';
+import Spinner from '../components/ui/Spinner';
+import Icon from '../components/ui/Icon';
+import StatusBadge from '../components/ui/StatusBadge';
+import EmptyState from '../components/ui/EmptyState';
 
 const SCHEDULE_LABELS = { hourly: 'Cada hora', daily: 'Diario', weekly: 'Semanal' };
 const DAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -17,27 +25,29 @@ function fmtDate(d) {
   return new Date(d).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-function StatusBadge({ status }) {
-  const map = {
-    success: 'bg-green-100 text-green-700',
-    failed:  'bg-red-100 text-red-700',
-    running: 'bg-blue-100 text-blue-700 animate-pulse',
-  };
-  const labels = { success: 'Exitoso', failed: 'Fallido', running: 'En curso…' };
-  return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${map[status] || 'bg-gray-100 text-gray-600'}`}>{labels[status] || status}</span>;
-}
+const LOG_STATUS = {
+  success: { tone: 'success', label: 'Completada' },
+  failed:  { tone: 'danger',  label: 'Falló' },
+  running: { tone: 'info',    label: 'En curso' },
+};
 
-function Card({ title, icon, children }) {
+function Section({ title, icon, children, id }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-2.5 px-5 py-4 border-b border-gray-100">
-        <span className="text-jal-blue-600">{icon}</span>
-        <h2 className="font-semibold text-gray-800 text-sm">{title}</h2>
+    <section className="card p-0" aria-labelledby={id}>
+      <div className="flex items-center gap-2.5 border-b border-line px-5 py-4">
+        <Icon name={icon} className="text-brand" />
+        <h2 id={id} className="title-card">{title}</h2>
       </div>
       <div className="p-5">{children}</div>
-    </div>
+    </section>
   );
 }
+Section.propTypes = {
+  title: PropTypes.string.isRequired,
+  icon: PropTypes.string.isRequired,
+  children: PropTypes.node,
+  id: PropTypes.string.isRequired,
+};
 
 export default function BackupPage() {
   const token = useAuthStore(s => s.token);
@@ -50,12 +60,10 @@ export default function BackupPage() {
   const [openingFolder, setOpeningFolder] = useState(false);
   const [downloadingFile, setDownloadingFile] = useState('');
   const [form, setForm]             = useState({});
-  const [toast, setToast]           = useState(null);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
-  const showToast = (msg, type = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 4000);
-  };
+  // Avisos con el sistema común de toasts (antes había uno propio fijo arriba a la derecha)
+  const showToast = (msg, type = 'success') => (type === 'error' ? toast.error(msg) : toast.success(msg));
 
   const load = useCallback(async () => {
     try {
@@ -74,7 +82,7 @@ export default function BackupPage() {
         schedule_day:    c.schedule_day,
         retention_count: c.retention_count,
       });
-    } catch { showToast('Error al cargar configuración', 'error'); }
+    } catch { showToast('No se pudo cargar la configuración de copias.', 'error'); }
     finally { setLoading(false); }
   }, [token]);
 
@@ -82,7 +90,7 @@ export default function BackupPage() {
     load();
     // Leer parámetros de URL (callback de OAuth)
     const p = new URLSearchParams(window.location.search);
-    if (p.get('connected')) { showToast('¡Google Drive conectado exitosamente!'); load(); }
+    if (p.get('connected')) { showToast('Google Drive quedó conectado.'); load(); }
     if (p.get('error'))     showToast(`Error al conectar: ${p.get('error')}`, 'error');
     window.history.replaceState({}, '', window.location.pathname);
   }, [load]);
@@ -95,8 +103,8 @@ export default function BackupPage() {
   }
 
   async function disconnect() {
-    if (!confirm('¿Desconectar Google Drive? Se eliminarán los tokens guardados.')) return;
-    try { await backupService.disconnect(token); load(); showToast('Google Drive desconectado'); }
+    setConfirmDisconnect(false);
+    try { await backupService.disconnect(token); load(); showToast('Google Drive desconectado.'); }
     catch (err) { showToast(err.message, 'error'); }
   }
 
@@ -105,7 +113,7 @@ export default function BackupPage() {
     try {
       await backupService.saveConfig(form, token);
       load();
-      showToast('Configuración guardada');
+      showToast('Programación guardada.');
     } catch (err) { showToast(err.message, 'error'); }
     finally { setSaving(false); }
   }
@@ -114,7 +122,7 @@ export default function BackupPage() {
     setRunning(true);
     try {
       await backupService.runBackup(token);
-      showToast('Backup iniciado. Puede tardar unos segundos…');
+      showToast('La copia empezó. El historial se actualizará cuando termine.');
       setTimeout(load, 4000);
     } catch (err) { showToast(err.message || 'Error al crear backup', 'error'); }
     finally { setRunning(false); }
@@ -136,297 +144,214 @@ export default function BackupPage() {
     finally { setDownloadingFile(''); }
   }
 
+  const layout = { title: 'Copias de seguridad', eyebrow: 'Administración', description: 'Copias automáticas en Google Drive y copias guardadas en el equipo del servidor.' };
+
   if (loading) return (
-    <AppLayout title="Backup · Google Drive">
-      <div className="flex justify-center items-center h-40">
-        <div className="animate-spin w-8 h-8 border-4 border-jal-blue-200 border-t-jal-blue-600 rounded-full" />
-      </div>
+    <AppLayout {...layout}>
+      <p role="status" className="flex h-40 items-center justify-center gap-2 text-ink-muted"><Spinner />Cargando…</p>
     </AppLayout>
   );
 
+  const selectField = (id, label, value, onChange, options) => (
+    <div>
+      <label className="label" htmlFor={id}>{label}</label>
+      <select id={id} className="input" value={value} onChange={onChange}>{options}</select>
+    </div>
+  );
+
   return (
-    <AppLayout title="Backup · Google Drive">
-      {toast && (
-        <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 ${toast.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
-          {toast.type === 'error'
-            ? <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            : <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-          {toast.msg}
-        </div>
+    <AppLayout {...layout}>
+      {confirmDisconnect && (
+        <ConfirmDialog
+          danger
+          title="¿Desconectar Google Drive?"
+          message="Las copias automáticas dejarán de subirse a Drive. Las que ya están allí no se borran."
+          confirmLabel="Desconectar"
+          onConfirm={disconnect}
+          onCancel={() => setConfirmDisconnect(false)}
+        />
       )}
 
-      <div className="max-w-3xl mx-auto space-y-5">
-
-        {/* ── Configuración de credenciales ── */}
+      <div className="space-y-6">
         {!cfg?.configured && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-            <strong>Credenciales no configuradas.</strong> Abre <code className="bg-amber-100 px-1 rounded">backend/.env</code> y llena:
-            <pre className="mt-2 text-xs bg-amber-100 rounded p-2 select-all">
+          <Notice tone="warning" title="Falta configurar las credenciales de Google en el servidor">
+            <p>Quien administra el servidor debe llenar en <code className="rounded bg-surface px-1">backend/.env</code>:</p>
+            <pre className="mt-2 select-all overflow-x-auto rounded-sm bg-surface p-2 font-mono text-sm">
 {`GOOGLE_CLIENT_ID=tu_client_id_aqui
 GOOGLE_CLIENT_SECRET=tu_client_secret_aqui`}
             </pre>
-            <p className="mt-2">Obtén las credenciales en <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="underline">Google Cloud Console</a> → APIs → Credenciales → OAuth 2.0.</p>
-            <p className="mt-1">URI de redirección autorizada: <code className="bg-amber-100 px-1 rounded">http://localhost:3001/v1/backup/drive/callback</code></p>
-          </div>
+            <p className="mt-2">Se obtienen en <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="link">Google Cloud Console</a> → APIs → Credenciales → OAuth 2.0.</p>
+            <p className="mt-1">Dirección de redirección autorizada: <code className="break-all rounded bg-surface px-1">http://localhost:3001/v1/backup/drive/callback</code></p>
+          </Notice>
         )}
 
-        {/* ── Conexión con Google Drive ── */}
-        <Card title="Conexión con Google Drive" icon={
-          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6.96 11.5L2 19l2.5 4h15l2.5-4-6.96-7.5H6.96zm.88-1.5l4.16-7h0a2 2 0 013.5 0l4.16 7H7.84zm9.32 1.5L22 19l-2.5 4H4.5L2 19l5.84-7.5h9.32z" />
-          </svg>
-        }>
+        <Section id="s-drive" title="Conexión con Google Drive" icon="nube">
           {cfg?.connected ? (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
+                  <span className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-full bg-success-bg text-success-fg"><Icon name="check" /></span>
                   <div>
-                    <p className="text-sm font-medium text-gray-800">Conectado</p>
-                    <p className="text-xs text-gray-500">{cfg.email || 'cuenta de Google'}</p>
+                    <p className="font-semibold">Conectado</p>
+                    <p className="text-ink-muted">{cfg.email || 'Cuenta de Google'}</p>
                   </div>
                 </div>
-                <button onClick={disconnect} className="text-sm text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 px-3 py-1.5 rounded-lg transition-colors">
-                  Desconectar
-                </button>
+                <button type="button" onClick={() => setConfirmDisconnect(true)} className="btn-danger-outline btn-sm">Desconectar</button>
               </div>
 
-              {/* Carpeta en Drive */}
-              <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-                <svg className="w-5 h-5 text-jal-blue-500 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-700">Carpeta en Google Drive</p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {cfg.folder_id ? 'Gestor JAL Backups' : 'Se creará al hacer el primer backup'}
-                  </p>
+              <div className="flex flex-wrap items-center gap-3 rounded-md border border-line bg-sunken px-4 py-3">
+                <Icon name="carpeta" className="text-brand" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold">Carpeta en Google Drive</p>
+                  <p className="truncate text-ink-muted">{cfg.folder_id ? 'Gestor JAL Backups' : 'Se creará con la primera copia'}</p>
                 </div>
-                {cfg.folder_id ? (
-                  <a
-                    href={`https://drive.google.com/drive/folders/${cfg.folder_id}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1.5 text-xs font-medium text-jal-blue-600 hover:text-jal-blue-700 bg-white border border-jal-blue-200 hover:border-jal-blue-400 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    Abrir carpeta
+                {cfg.folder_id && (
+                  <a href={`https://drive.google.com/drive/folders/${cfg.folder_id}`} target="_blank" rel="noreferrer" className="btn-secondary btn-sm">
+                    Abrir carpeta<span className="sr-only"> (se abre en otra pestaña)</span>
                   </a>
-                ) : (
-                  <span className="text-xs text-gray-400 flex-shrink-0">Sin backups aún</span>
                 )}
               </div>
             </div>
           ) : (
-            <div className="text-center py-4">
-              <p className="text-sm text-gray-600 mb-4">Conecta tu cuenta de Google para guardar los backups en Drive automáticamente.</p>
-              <button onClick={connectDrive} disabled={!cfg?.configured}
-                className="inline-flex items-center gap-2 bg-white border border-gray-300 hover:border-jal-blue-400 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors disabled:opacity-40 shadow-sm">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M6.96 11.5L2 19l2.5 4h15l2.5-4-6.96-7.5H6.96zm.88-1.5l4.16-7h0a2 2 0 013.5 0l4.16 7H7.84zm9.32 1.5L22 19l-2.5 4H4.5L2 19l5.84-7.5h9.32z" />
-                </svg>
-                Conectar con Google Drive
+            <div className="py-2">
+              <p className="mb-4 max-w-prose text-ink-muted">Conecta una cuenta de Google para que las copias se guarden también en Drive.</p>
+              <button type="button" onClick={connectDrive} disabled={!cfg?.configured} className="btn-primary">
+                <Icon name="nube" />Conectar con Google Drive
               </button>
             </div>
           )}
-        </Card>
+        </Section>
 
         {cfg?.connected && (<>
-
-        {/* ── Backup ahora ── */}
-        <Card title="Backup manual" icon={
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-        }>
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="text-sm text-gray-600 space-y-1">
-              <p>Incluye: base de datos · documentos · plantillas</p>
-              <p>Último backup: <span className="font-medium text-gray-800">{fmtDate(cfg.last_backup_at)}</span></p>
-              {cfg.auto_enabled && <p>Próximo automático: <span className="font-medium text-gray-800">{fmtDate(cfg.next_backup_at)}</span></p>}
+          <Section id="s-manual" title="Copia manual" icon="copia">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <dl className="space-y-1 text-ink-muted">
+                <div><dt className="inline">Incluye: </dt><dd className="inline">base de datos, documentos y plantillas</dd></div>
+                <div><dt className="inline">Última copia: </dt><dd className="inline font-semibold text-ink">{fmtDate(cfg.last_backup_at)}</dd></div>
+                {cfg.auto_enabled && <div><dt className="inline">Próxima automática: </dt><dd className="inline font-semibold text-ink">{fmtDate(cfg.next_backup_at)}</dd></div>}
+              </dl>
+              <button type="button" onClick={runNow} disabled={running} className="btn-primary" aria-busy={running || undefined}>
+                {running ? <Spinner /> : <Icon name="copia" />}
+                {running ? 'Iniciando…' : 'Hacer una copia ahora'}
+              </button>
             </div>
-            <button onClick={runNow} disabled={running}
-              className="flex items-center gap-2 bg-jal-blue-600 hover:bg-jal-blue-700 text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-colors disabled:opacity-50">
-              {running
-                ? <><div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Creando…</>
-                : <><svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>Crear backup ahora</>}
-            </button>
-          </div>
-        </Card>
+          </Section>
 
-        {/* ── Programación automática ── */}
-        <Card title="Backup automático" icon={
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        }>
-          <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" className="w-4 h-4 rounded text-jal-blue-600"
-                checked={form.auto_enabled || false}
-                onChange={e => setForm(f => ({ ...f, auto_enabled: e.target.checked }))} />
-              <span className="text-sm font-medium text-gray-700">Activar backup automático</span>
-            </label>
+          <Section id="s-auto" title="Copia automática" icon="config">
+            <div className="space-y-4">
+              <label className="flex min-h-[44px] cursor-pointer items-center gap-3">
+                <input type="checkbox" className="h-5 w-5 rounded accent-brand"
+                  checked={form.auto_enabled || false}
+                  onChange={e => setForm(f => ({ ...f, auto_enabled: e.target.checked }))} />
+                <span className="font-semibold">Hacer copias automáticas</span>
+              </label>
 
-            {form.auto_enabled && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Frecuencia</label>
-                  <select value={form.schedule || 'daily'} onChange={e => setForm(f => ({ ...f, schedule: e.target.value }))}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-jal-blue-400">
-                    {Object.entries(SCHEDULE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                </div>
+              {form.auto_enabled && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {selectField('b-freq', 'Frecuencia', form.schedule || 'daily',
+                    e => setForm(f => ({ ...f, schedule: e.target.value })),
+                    Object.entries(SCHEDULE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>))}
 
-                {(form.schedule === 'daily' || form.schedule === 'weekly') && (
+                  {(form.schedule === 'daily' || form.schedule === 'weekly') && selectField('b-hora', 'Hora', form.schedule_hour ?? 2,
+                    e => setForm(f => ({ ...f, schedule_hour: parseInt(e.target.value) })),
+                    Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>))}
+
+                  {form.schedule === 'weekly' && selectField('b-dia', 'Día de la semana', form.schedule_day ?? 1,
+                    e => setForm(f => ({ ...f, schedule_day: parseInt(e.target.value) })),
+                    DAY_LABELS.map((d, i) => <option key={i} value={i}>{d}</option>))}
+
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Hora de ejecución</label>
-                    <select value={form.schedule_hour ?? 2} onChange={e => setForm(f => ({ ...f, schedule_hour: parseInt(e.target.value) }))}
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-jal-blue-400">
-                      {Array.from({ length: 24 }, (_, i) => (
-                        <option key={i} value={i}>{String(i).padStart(2, '0')}:00</option>
-                      ))}
-                    </select>
+                    <label className="label" htmlFor="b-ret">Cuántas copias guardar</label>
+                    <p className="hint" id="b-ret-hint">Las más antiguas se borran al pasar de este número.</p>
+                    <input id="b-ret" type="number" min={1} max={50} className="input" aria-describedby="b-ret-hint"
+                      value={form.retention_count ?? 10}
+                      onChange={e => setForm(f => ({ ...f, retention_count: parseInt(e.target.value) }))} />
                   </div>
-                )}
-
-                {form.schedule === 'weekly' && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Día de la semana</label>
-                    <select value={form.schedule_day ?? 1} onChange={e => setForm(f => ({ ...f, schedule_day: parseInt(e.target.value) }))}
-                      className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-jal-blue-400">
-                      {DAY_LABELS.map((d, i) => <option key={i} value={i}>{d}</option>)}
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Retener últimos N backups</label>
-                  <input type="number" min={1} max={50} value={form.retention_count ?? 10}
-                    onChange={e => setForm(f => ({ ...f, retention_count: parseInt(e.target.value) }))}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-jal-blue-400" />
                 </div>
+              )}
+
+              <button type="button" onClick={saveSchedule} disabled={saving} className="btn-primary" aria-busy={saving || undefined}>
+                {saving && <Spinner />}
+                {saving ? 'Guardando…' : 'Guardar programación'}
+              </button>
+            </div>
+          </Section>
+
+          <Section id="s-local" title="Copias en el equipo del servidor" icon="carpeta">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-ink-muted">Guardadas en <code className="rounded bg-sunken px-1">data/backups/</code></p>
+              <button type="button" onClick={handleOpenFolder} disabled={openingFolder} className="btn-secondary btn-sm" aria-busy={openingFolder || undefined}>
+                {openingFolder && <Spinner />}
+                {openingFolder ? 'Abriendo…' : 'Abrir carpeta'}
+              </button>
+            </div>
+
+            {localFiles.length === 0 ? (
+              <EmptyState compact message="Todavía no hay copias en este equipo." />
+            ) : (
+              <ul className="divide-y divide-line rounded-md border border-line">
+                {localFiles.map((f) => (
+                  <li key={f.filename} className="flex items-center gap-3 px-3 py-2.5">
+                    <Icon name="documento" className="text-ink-muted" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold">{f.filename}</p>
+                      <p className="text-sm text-ink-muted">{fmt(f.size_bytes)} · {fmtDate(f.created_at)}</p>
+                    </div>
+                    <button type="button" onClick={() => handleDownloadLocal(f.filename)} disabled={downloadingFile === f.filename}
+                      className="btn-ghost btn-sm" aria-label={`Descargar ${f.filename}`}>
+                      {downloadingFile === f.filename ? <Spinner /> : <Icon name="descargar" size={18} />}
+                      Descargar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
+          <Section id="s-hist" title="Historial de copias en Drive" icon="auditoria">
+            {logs.length === 0 ? (
+              <EmptyState compact message="Todavía no hay copias registradas." />
+            ) : (
+              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Historial de copias">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Archivo</th>
+                      <th scope="col">Fecha</th>
+                      <th scope="col">Tamaño</th>
+                      <th scope="col">Tipo</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col"><span className="sr-only">Enlace</span></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {logs.map(log => {
+                      const st = LOG_STATUS[log.status] || { tone: 'neutral', label: log.status };
+                      return (
+                        <tr key={log.id}>
+                          <td className="max-w-[14rem] truncate" title={log.filename}>{log.filename || '—'}</td>
+                          <td className="whitespace-nowrap text-ink-muted">{fmtDate(log.created_at)}</td>
+                          <td className="text-ink-muted">{fmt(log.size_bytes)}</td>
+                          <td>{log.type === 'auto' ? 'Automática' : 'Manual'}</td>
+                          <td><StatusBadge tone={st.tone}>{st.label}</StatusBadge></td>
+                          <td>
+                            {log.drive_file_url && (
+                              <a href={log.drive_file_url} target="_blank" rel="noreferrer" className="link">
+                                Ver en Drive<span className="sr-only"> (se abre en otra pestaña)</span>
+                              </a>
+                            )}
+                            {log.status === 'failed' && log.error_message && (
+                              <span className="text-danger-fg">{log.error_message}</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
-
-            <button onClick={saveSchedule} disabled={saving}
-              className="flex items-center gap-2 bg-jal-blue-600 hover:bg-jal-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors disabled:opacity-50 mt-2">
-              {saving ? 'Guardando…' : 'Guardar configuración'}
-            </button>
-          </div>
-        </Card>
-
-        {/* ── Archivos locales ── */}
-        <Card title="Backups en este equipo" icon={
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7" />
-          </svg>
-        }>
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <p className="text-xs text-gray-500">
-              Copias guardadas localmente en <code className="bg-gray-100 px-1 rounded text-gray-600">data/backups/</code>
-            </p>
-            <button
-              onClick={handleOpenFolder}
-              disabled={openingFolder}
-              className="flex items-center gap-1.5 text-xs font-medium text-jal-blue-600 hover:text-jal-blue-700 bg-jal-blue-50 hover:bg-jal-blue-100 border border-jal-blue-200 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-              {openingFolder ? 'Abriendo…' : 'Abrir carpeta'}
-            </button>
-          </div>
-
-          {localFiles.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-4">No hay backups locales aún.</p>
-          ) : (
-            <div className="space-y-2">
-              {localFiles.map((f) => (
-                <div key={f.filename} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2.5 border border-gray-100">
-                  <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-700 truncate">{f.filename}</p>
-                    <p className="text-xs text-gray-400">{fmt(f.size_bytes)} · {fmtDate(f.created_at)}</p>
-                  </div>
-                  <button
-                    onClick={() => handleDownloadLocal(f.filename)}
-                    disabled={downloadingFile === f.filename}
-                    className="text-xs text-jal-blue-600 hover:text-jal-blue-700 font-medium flex-shrink-0 disabled:opacity-50"
-                  >
-                    {downloadingFile === f.filename ? '…' : 'Descargar'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* ── Historial de backups ── */}
-        <Card title="Historial de backups (Drive)" icon={
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-          </svg>
-        }>
-          {logs.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-4">No hay backups registrados aún.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Archivo</th>
-                    <th className="text-left pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Fecha</th>
-                    <th className="text-left pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tamaño</th>
-                    <th className="text-left pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Tipo</th>
-                    <th className="text-left pb-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">Estado</th>
-                    <th className="pb-2"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {logs.map(log => (
-                    <tr key={log.id} className="hover:bg-gray-50/50">
-                      <td className="py-2.5 pr-4 text-gray-700 max-w-[180px] truncate" title={log.filename}>
-                        {log.filename || '—'}
-                      </td>
-                      <td className="py-2.5 pr-4 text-gray-600 whitespace-nowrap">{fmtDate(log.created_at)}</td>
-                      <td className="py-2.5 pr-4 text-gray-600">{fmt(log.size_bytes)}</td>
-                      <td className="py-2.5 pr-4">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${log.type === 'auto' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
-                          {log.type === 'auto' ? 'Automático' : 'Manual'}
-                        </span>
-                      </td>
-                      <td className="py-2.5 pr-4"><StatusBadge status={log.status} /></td>
-                      <td className="py-2.5">
-                        {log.drive_file_url && (
-                          <a href={log.drive_file_url} target="_blank" rel="noreferrer"
-                            className="text-jal-blue-600 hover:text-jal-blue-700 text-xs flex items-center gap-1">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                            Drive
-                          </a>
-                        )}
-                        {log.status === 'failed' && log.error_message && (
-                          <span className="text-xs text-red-500" title={log.error_message}>Ver error</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-
+          </Section>
         </>)}
       </div>
     </AppLayout>
