@@ -5,6 +5,11 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 
 ---
 
+## [Sin publicar] — 2026-10-29
+
+### Cambiado
+- **Rediseño integral del frontend** «El archivo vivo de la comunidad»: nuevo sistema visual, navegación con barra inferior en celular, Crear documento por pasos, Buscar con filtros a un clic, diálogos accesibles en lugar de `confirm()`, movimiento con `prefers-reduced-motion` y WCAG 2.2 AA verificado con axe-core. Detalle en [`docs/design/CHANGELOG.md`](docs/design/CHANGELOG.md). Sin cambios en backend, rutas ni pruebas.
+
 ## [Sin publicar] — 2026-10-27
 
 ### Seguridad
