@@ -51,7 +51,9 @@ export default function ChatWidget() {
   const inputRef  = useRef(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Con «reducir movimiento» el desplazamiento es inmediato
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    bottomRef.current?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth' });
   }, [messages]);
 
   useEffect(() => {

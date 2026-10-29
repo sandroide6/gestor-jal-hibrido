@@ -194,7 +194,7 @@ export default function AuditLogsPage() {
 
       {/* Tabla */}
       <div className="table-wrap">
-        <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Registros de auditoría">
+        <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Registros de auditoría">
           <table className="table">
             <thead>
               <tr>

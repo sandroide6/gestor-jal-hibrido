@@ -211,7 +211,7 @@ export default function UsersPage() {
       ) : (
         <>
           {/* Escritorio: tabla */}
-          <div className="table-wrap hidden overflow-x-auto lg:block">
+          <div className="table-wrap relative hidden overflow-x-auto lg:block">
             <table className="table">
               <thead>
                 <tr>

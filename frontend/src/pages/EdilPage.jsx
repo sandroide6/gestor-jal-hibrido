@@ -355,7 +355,7 @@ export default function EdilPage() {
       ) : (
         <div className={`transition-opacity duration-fast ${loading ? 'opacity-60' : ''}`} aria-busy={loading || undefined}>
           {/* Escritorio: tabla */}
-          <div className="table-wrap hidden lg:block">
+          <div className="table-wrap hidden xl:block">
             <table className="table">
               <caption className="sr-only">Documentos encontrados</caption>
               <thead>
@@ -400,7 +400,7 @@ export default function EdilPage() {
           </div>
 
           {/* Móvil y tablet: fichas apiladas, misma información y acciones */}
-          <ul className="space-y-3 lg:hidden">
+          <ul className="space-y-3 xl:hidden">
             {docs.map((doc) => (
               <li key={doc.id} className="card !p-4">
                 <div className="flex gap-4">

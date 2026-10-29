@@ -312,7 +312,7 @@ GOOGLE_CLIENT_SECRET=tu_client_secret_aqui`}
             {logs.length === 0 ? (
               <EmptyState compact message="Todavía no hay copias registradas." />
             ) : (
-              <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Historial de copias">
+              <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Historial de copias">
                 <table className="table">
                   <thead>
                     <tr>

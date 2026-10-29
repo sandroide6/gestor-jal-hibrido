@@ -117,7 +117,7 @@
   .title-card    { @apply font-serif text-lg leading-snug font-semibold text-ink sm:text-xl; }
 
   /* ── Tablas ──────────────────────────────────────────── */
-  .table-wrap { @apply bg-surface rounded-lg border border-line overflow-hidden; }
+  .table-wrap { @apply bg-surface rounded-lg border border-line relative overflow-hidden; }
   .table { @apply w-full text-[0.9375rem]; }
   .table thead th {
     @apply bg-sunken text-left text-eyebrow uppercase text-ink-muted px-4 py-3 whitespace-nowrap;

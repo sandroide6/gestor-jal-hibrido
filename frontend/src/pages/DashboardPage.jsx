@@ -15,16 +15,16 @@ import Icon from '../components/ui/Icon';
 
 // Resumen como renglón de libro: cifras grandes en serif, separadas por filetes, sin colores por tarjeta.
 function Figure({ label, value, sub, to }) {
-  const body = (
-    <>
-      <dt className="text-eyebrow uppercase text-ink-muted">{label}</dt>
-      <dd className="mt-1 font-serif text-4xl font-semibold leading-none text-brand">{value ?? '—'}</dd>
-      {sub && <dd className="mt-1.5 text-sm text-ink-muted">{sub}</dd>}
-    </>
-  );
+  const number = <span className="font-serif text-4xl font-semibold leading-none text-brand">{value ?? '—'}</span>;
   return (
     <div className="bg-surface px-5 py-4">
-      {to ? <Link to={to} className="block rounded-sm decoration-brand-300 underline-offset-4 hover:underline">{body}</Link> : body}
+      <dt className="text-eyebrow uppercase text-ink-muted">{label}</dt>
+      <dd className="mt-1">
+        {to
+          ? <Link to={to} className="rounded-sm decoration-brand-300 underline-offset-4 hover:underline">{number}<span className="sr-only"> — ver la lista</span></Link>
+          : number}
+      </dd>
+      {sub && <dd className="mt-1.5 text-sm text-ink-muted">{sub}</dd>}
     </div>
   );
 }
@@ -98,14 +98,14 @@ export default function DashboardPage() {
       </section>
 
       <div className="grid gap-10 xl:grid-cols-3">
-        <section aria-labelledby="titulo-recientes" className="xl:col-span-2">
+        <section aria-labelledby="titulo-recientes" className="min-w-0 xl:col-span-2">
           <h2 id="titulo-recientes" className="title-section mb-3">Documentos recientes</h2>
           {loading ? (
             <SkeletonTable rows={4} cols={4} />
           ) : !stats?.recentDocuments?.length ? (
             <EmptyState message="Todavía no se ha creado ningún documento." />
           ) : (
-            <div className="table-wrap overflow-x-auto">
+            <div className="table-wrap relative overflow-x-auto" tabIndex={0} role="region" aria-label="Documentos recientes">
               <table className="table">
                 <thead>
                   <tr>
@@ -133,7 +133,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <div className="space-y-8">
+        <div className="min-w-0 space-y-8">
           <nav aria-labelledby="titulo-accesos">
             <h2 id="titulo-accesos" className="title-section mb-3">Accesos</h2>
             <ul className="overflow-hidden rounded-lg border border-line bg-surface">

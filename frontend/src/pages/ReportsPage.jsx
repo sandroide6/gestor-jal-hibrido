@@ -26,6 +26,7 @@ const C = {
   tick: '#5B6560',      // --color-ink-muted
 };
 const TICK = { fontSize: 13, fill: C.tick };
+// Sin animación de entrada: son datos para leer, no deben moverse (ver docs/design/06-motion-y-animaciones.md)
 const EMPTY_FILTERS = { doc_type_id: '', user_id: '', date_from: '', date_to: '', reviewed: '' };
 
 // ── Componentes reutilizables ─────────────────────────────
@@ -227,7 +228,7 @@ export default function ReportsPage() {
                 <ChartCard title="Estado de revisión" minH={240}>
                   <ResponsiveContainer width="100%" height={240}>
                     <PieChart>
-                      <Pie
+                      <Pie isAnimationActive={false}
                         data={reviewedPieData}
                         cx="50%"
                         cy="45%"
@@ -267,8 +268,8 @@ export default function ReportsPage() {
                         />
                         <Tooltip content={<CustomTooltip />} />
                         <Legend iconSize={8} iconType="circle" wrapperStyle={{ fontSize: 14 }} />
-                        <Bar dataKey="reviewed" name="Revisados"  stackId="a" fill={C.reviewed} />
-                        <Bar dataKey="pending"  name="Pendientes" stackId="a" fill={C.pending} radius={[0, 4, 4, 0]} />
+                        <Bar isAnimationActive={false} dataKey="reviewed" name="Revisados"  stackId="a" fill={C.reviewed} />
+                        <Bar isAnimationActive={false} dataKey="pending"  name="Pendientes" stackId="a" fill={C.pending} radius={[0, 4, 4, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -298,7 +299,7 @@ export default function ReportsPage() {
                       />
                       <YAxis tick={TICK} allowDecimals={false} width={28} />
                       <Tooltip content={<CustomTooltip />} />
-                      <Area
+                      <Area isAnimationActive={false}
                         type="monotone"
                         dataKey="count"
                         name="Documentos"
@@ -332,7 +333,7 @@ export default function ReportsPage() {
                         tickFormatter={(v) => v.length > 22 ? `${v.slice(0, 21)}…` : v}
                       />
                       <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="total" name="Documentos" radius={[0, 4, 4, 0]} fill={C.brand}>
+                      <Bar isAnimationActive={false} dataKey="total" name="Documentos" radius={[0, 4, 4, 0]} fill={C.brand}>
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>

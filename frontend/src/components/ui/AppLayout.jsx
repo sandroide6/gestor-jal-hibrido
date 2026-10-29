@@ -195,7 +195,7 @@ function MobileDrawer({ user, groups, pathname, onClose, onProfile, onPassword, 
         role="dialog"
         aria-modal="true"
         aria-label="Menú"
-        className="anim-drawer relative flex h-full w-80 max-w-[86vw] flex-col bg-brand pt-5 shadow-float"
+        className="anim-drawer relative flex h-full w-80 max-w-[86vw] flex-col overflow-y-auto bg-brand pt-5 shadow-float [&>nav]:shrink-0 [&>nav]:overflow-visible"
       >
         <div className="flex items-start justify-between gap-3 px-5 pb-5">
           <Wordmark />
@@ -341,7 +341,7 @@ export default function AppLayout({ children, title, heading, eyebrow, descripti
           <SyncProgressBanner />
         </header>
 
-        <main id="contenido" tabIndex={-1} className="flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-16 focus:outline-none">
+        <main id="contenido" tabIndex={-1} className="min-w-0 flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-28 focus:outline-none">
           <div className={`mx-auto w-full ${maxW}`}>
             {header && (heading || title) && (
               <PageHeader eyebrow={eyebrow} title={heading || title} description={description} actions={actions} />
