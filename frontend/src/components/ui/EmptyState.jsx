@@ -1,35 +1,37 @@
 import PropTypes from 'prop-types';
+import Icon from './Icon';
 
 /**
- * Unified empty-state component.
+ * Estado vacío: dice qué falta y qué hacer a continuación.
  *
- * Usage:
- *   – Inside a <tr>:  <EmptyState message="…" colSpan={5} />
- *   – Standalone card: <EmptyState message="…" action={<button …>Crear</button>} />
- *   – Small inline:   <EmptyState message="…" compact />
+ *   – Dentro de una tabla: <EmptyState message="…" colSpan={5} />
+ *   – Bloque propio:      <EmptyState title="…" message="…" action={<Link …/>} />
+ *   – Compacto:           <EmptyState message="…" compact />
  */
-export default function EmptyState({ message, action, colSpan, compact }) {
+export default function EmptyState({ title, message, action, colSpan, compact, icon = 'carpeta' }) {
   const body = (
-    <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-4' : 'py-10'}`}>
-      <p className={`text-gray-400 ${compact ? 'text-xs' : 'text-sm'}`}>{message}</p>
-      {action && <div className="mt-3">{action}</div>}
+    <div className={`flex flex-col items-center justify-center text-center ${compact ? 'py-5' : 'py-10 px-4'}`}>
+      {!compact && (
+        <span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-sunken text-ink-muted">
+          <Icon name={icon} size={22} />
+        </span>
+      )}
+      {title && <p className="font-serif text-lg font-semibold text-ink">{title}</p>}
+      <p className={`max-w-prose text-ink-muted ${compact ? 'text-[0.9375rem]' : ''}`}>{message}</p>
+      {action && <div className="mt-4 flex flex-wrap justify-center gap-2">{action}</div>}
     </div>
   );
 
-  if (colSpan != null) {
-    return <td colSpan={colSpan} className="px-4">{body}</td>;
-  }
-
-  if (compact) {
-    return body;
-  }
-
-  return <div className="card">{body}</div>;
+  if (colSpan != null) return <td colSpan={colSpan} className="px-4">{body}</td>;
+  if (compact) return body;
+  return <div className="rounded-lg border border-dashed border-line-strong bg-surface/60">{body}</div>;
 }
 
 EmptyState.propTypes = {
-  message:  PropTypes.string.isRequired,
-  action:   PropTypes.node,
-  colSpan:  PropTypes.number,
-  compact:  PropTypes.bool,
+  title: PropTypes.string,
+  message: PropTypes.string.isRequired,
+  action: PropTypes.node,
+  colSpan: PropTypes.number,
+  compact: PropTypes.bool,
+  icon: PropTypes.string,
 };

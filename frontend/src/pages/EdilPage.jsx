@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import PropTypes from 'prop-types';
+import { useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import AppLayout from '../components/ui/AppLayout';
 import { fetchDocuments, markReviewed, fetchPendingCount } from '../services/edilService';
@@ -8,6 +9,14 @@ import { useDocTypes } from '../hooks/useDocTypes';
 import { useUsers } from '../hooks/useUsers';
 import { formatDate } from '../utils/format';
 import EmptyState from '../components/ui/EmptyState';
+import Notice from '../components/ui/Notice';
+import Radicado from '../components/ui/Radicado';
+import Spinner from '../components/ui/Spinner';
+import Icon from '../components/ui/Icon';
+import { DocumentStatus } from '../components/ui/StatusBadge';
+import { ConfirmDialog } from '../components/ui/Dialog';
+import { LedgerDate } from '../components/documents/DocumentRow';
+import { toast } from '../stores/toastStore';
 
 const EMPTY_FILTERS = {
   doc_type_name: '',
@@ -22,26 +31,66 @@ const EMPTY_FILTERS = {
   limit: 50,
 };
 
-function StatusBadge({ synced, reviewed }) {
-  if (!reviewed && synced === 'synced') {
-    return <span className="badge-pending">Pendiente revisión</span>;
-  }
-  if (reviewed) {
-    return <span className="badge-synced">Revisado</span>;
-  }
-  if (synced === 'conflict') {
-    return <span className="badge-conflict">Conflicto</span>;
-  }
-  if (synced === 'pending') {
-    return <span className="badge-pending">Sin sincronizar</span>;
-  }
-  return null;
-}
-StatusBadge.propTypes = {
-  synced: PropTypes.string.isRequired,
-  reviewed: PropTypes.bool.isRequired,
-};
+const ADVANCED_KEYS = ['doc_type_name', 'user_id', 'numero_radicado', 'date_from', 'date_to', 'reviewed'];
+const countAdvanced = (f) => ADVANCED_KEYS.filter((k) => f[k] !== '').length;
+const isFiltered = (f) => f.beneficiary !== '' || countAdvanced(f) > 0;
 
+// Acciones de un documento: descargas, revisar (edil/admin) y eliminar (solo admin).
+function DocActions({ doc, downloading, onDownload, onReview, reviewing, onDelete }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {['pdf', 'docx'].map((fmt) => {
+        const key = `${doc.id}-${fmt}`;
+        return (
+          <button
+            key={fmt}
+            type="button"
+            className="btn-secondary btn-sm"
+            disabled={!!downloading}
+            aria-busy={downloading === key || undefined}
+            aria-label={`Descargar ${fmt === 'pdf' ? 'PDF' : 'Word'} de ${doc.doc_type_name}, ${doc.beneficiary_name}`}
+            onClick={() => onDownload(doc, fmt)}
+          >
+            {downloading === key && <Spinner />}
+            {fmt === 'pdf' ? 'PDF' : 'Word'}
+          </button>
+        );
+      })}
+      {!doc.reviewed && (
+        <button
+          type="button"
+          className="btn-primary btn-sm"
+          onClick={() => onReview(doc.id)}
+          disabled={reviewing === doc.id}
+          aria-busy={reviewing === doc.id || undefined}
+          aria-label={`Marcar como revisado: ${doc.doc_type_name}, ${doc.beneficiary_name}`}
+        >
+          {reviewing === doc.id ? <Spinner /> : <Icon name="check" size={18} />}
+          Revisado
+        </button>
+      )}
+      {onDelete && (
+        <button
+          type="button"
+          className="btn-ghost btn-sm text-danger-fg hover:bg-danger-bg"
+          onClick={() => onDelete(doc)}
+          aria-label={`Eliminar ${doc.doc_type_name} de ${doc.beneficiary_name}`}
+        >
+          <Icon name="papelera" size={18} />
+          <span className="xl:sr-only">Eliminar</span>
+        </button>
+      )}
+    </div>
+  );
+}
+DocActions.propTypes = {
+  doc: PropTypes.object.isRequired,
+  downloading: PropTypes.string,
+  onDownload: PropTypes.func.isRequired,
+  onReview: PropTypes.func.isRequired,
+  reviewing: PropTypes.string,
+  onDelete: PropTypes.func,
+};
 
 export default function EdilPage() {
   const { token, user } = useAuthStore();
@@ -50,17 +99,24 @@ export default function EdilPage() {
   const { data: allUsers = [] } = useUsers(token);
   const auxiliares = allUsers.filter((u) => u.role === 'auxiliar' || u.role === 'administrador');
 
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [applied, setApplied] = useState(EMPTY_FILTERS);
+  // Desde Inicio: ?pendientes=1 abre la lista filtrada por lo que falta revisar
+  const [searchParams] = useSearchParams();
+  const initial = searchParams.get('pendientes') ? { ...EMPTY_FILTERS, reviewed: 'false' } : EMPTY_FILTERS;
+
+  const [filters, setFilters] = useState(initial);
+  const [applied, setApplied] = useState(initial);
+  const [showMore, setShowMore] = useState(countAdvanced(initial) > 0);
   const [data, setData] = useState({ total: 0, pages: 1, data: [] });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [downloading, setDownloading] = useState('');
+  const [reviewing, setReviewing] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
-  const [deleteTarget, setDeleteTarget] = useState(null); // { id, document_number, doc_type_name, beneficiary_name }
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
+  const refreshPending = useCallback(() => {
     fetchPendingCount(token)
       .then((cnt) => {
         setPendingCount(cnt);
@@ -69,21 +125,29 @@ export default function EdilPage() {
       .catch(() => {});
   }, [token]);
 
+  useEffect(() => { refreshPending(); }, [refreshPending]);
+
   const load = useCallback(async (f) => {
     setLoading(true);
-    setError('');
+    setLoadError('');
     try {
-      const res = await fetchDocuments(f, token);
-      setData(res);
+      setData(await fetchDocuments(f, token));
     } catch (err) {
-      setError(err.message || 'Error al cargar documentos');
+      setLoadError(err.message || 'Error al cargar documentos');
     } finally {
       setLoading(false);
     }
   }, [token]);
 
   // Carga inicial
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { load(applied); }, [load]);
+
+  function apply(next) {
+    setFilters(next);
+    setApplied(next);
+    load(next);
+  }
 
   function handleFilterChange(key, value) {
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
@@ -91,21 +155,27 @@ export default function EdilPage() {
 
   function handleSearch(e) {
     e.preventDefault();
-    const next = { ...filters, page: 1 };
-    setApplied(next);
-    load(next);
+    apply({ ...filters, page: 1 });
   }
 
   function handleClear() {
-    setFilters(EMPTY_FILTERS);
-    setApplied(EMPTY_FILTERS);
-    load(EMPTY_FILTERS);
+    apply(EMPTY_FILTERS);
   }
 
-  function handlePage(p) {
-    const next = { ...applied, page: p };
-    setApplied(next);
-    load(next);
+  function togglePendingOnly() {
+    apply({ ...applied, reviewed: applied.reviewed === 'false' ? '' : 'false', page: 1 });
+  }
+
+  async function handleDownload(doc, fmt) {
+    setDownloading(`${doc.id}-${fmt}`);
+    setActionError('');
+    try {
+      await downloadDocument(doc.id, fmt, token, `${doc.doc_type_name}_${doc.beneficiary_id}.${fmt}`);
+    } catch (e) {
+      setActionError(e.message || 'No se pudo descargar. Revisa la conexión e inténtalo de nuevo.');
+    } finally {
+      setDownloading('');
+    }
   }
 
   async function handleDelete() {
@@ -113,349 +183,278 @@ export default function EdilPage() {
     setDeleting(true);
     try {
       await deleteDocument(deleteTarget.id, token);
-      setData((prev) => ({
-        ...prev,
-        total: prev.total - 1,
-        data: prev.data.filter((d) => d.id !== deleteTarget.id),
-      }));
+      setData((prev) => ({ ...prev, total: prev.total - 1, data: prev.data.filter((d) => d.id !== deleteTarget.id) }));
+      toast.success(`Se eliminó ${deleteTarget.doc_type_name} de ${deleteTarget.beneficiary_name}.`);
       setDeleteTarget(null);
+      refreshPending();
     } catch (err) {
-      setError(err.message || 'Error al eliminar el documento');
+      setActionError(err.message || 'No se pudo eliminar el documento.');
+      setDeleteTarget(null);
     } finally {
       setDeleting(false);
     }
   }
 
   async function handleMarkReviewed(docId) {
+    setReviewing(docId);
+    setActionError('');
     try {
       await markReviewed(docId, token);
-      // Actualizar fila localmente
       setData((prev) => ({
         ...prev,
-        data: prev.data.map((d) =>
-          d.id === docId ? { ...d, reviewed: true, reviewed_at: new Date().toISOString() } : d
-        ),
+        data: prev.data.map((d) => (d.id === docId ? { ...d, reviewed: true, reviewed_at: new Date().toISOString() } : d)),
       }));
-      const cnt = await fetchPendingCount(token);
-      setPendingCount(cnt);
-      if ('setAppBadge' in navigator) navigator.setAppBadge(cnt).catch(() => {});
+      refreshPending();
     } catch {
-      setError('No se pudo marcar el documento como revisado');
+      setActionError('No se pudo marcar el documento como revisado. Inténtalo de nuevo.');
+    } finally {
+      setReviewing('');
     }
   }
 
+  const docs = data.data ?? [];
+  const advanced = countAdvanced(filters);
+  const pendingOnly = applied.reviewed === 'false';
+
+  const summary = (
+    <>
+      {data.total} documento{data.total === 1 ? '' : 's'}{isFiltered(applied) ? ' con estos filtros' : ' en el archivo'}
+      {pendingCount > 0 && <> · <strong className="text-warning-fg">{pendingCount} esperan revisión</strong></>}
+    </>
+  );
+
   return (
-    <AppLayout title="Documentos">
-      {/* Resumen */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        <div className="card py-3 text-center">
-          <p className="text-2xl font-bold text-jal-blue-500">{data.total}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Total documentos</p>
-        </div>
-        <div className="card py-3 text-center">
-          <p className="text-2xl font-bold text-amber-500">{pendingCount}</p>
-          <p className="text-xs text-gray-500 mt-0.5">Pendientes revisión</p>
-        </div>
-        <div className="card py-3 text-center col-span-2 sm:col-span-2">
-          <p className="text-sm text-gray-500">
-            Mostrando página <strong>{applied.page}</strong> de <strong>{data.pages || 1}</strong>
-          </p>
-        </div>
-      </div>
-
-      {/* Filtros */}
-      <form onSubmit={handleSearch} className="card mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {/* Auxiliar */}
-          <div>
-            <label className="label">Auxiliar</label>
-            <select
-              className="input"
-              value={filters.user_id}
-              onChange={(e) => handleFilterChange('user_id', e.target.value)}
-            >
-              <option value="">Todas las auxiliares</option>
-              {auxiliares.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Tipo de documento */}
-          <div>
-            <label className="label">Tipo de documento</label>
-            <select
-              className="input"
-              value={filters.doc_type_name}
-              onChange={(e) => handleFilterChange('doc_type_name', e.target.value)}
-            >
-              <option value="">Todos los tipos</option>
-              {docTypes.map((t) => (
-                <option key={t.id} value={t.name}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Beneficiario / cédula */}
-          <div>
-            <label className="label">Beneficiario o cédula</label>
+    <AppLayout
+      title="Buscar documentos"
+      eyebrow="Archivo"
+      description={loading && !docs.length ? 'Busca por persona, cédula o número de radicado.' : summary}
+      actions={pendingCount > 0 && (
+        <button type="button" className={pendingOnly ? 'btn-primary' : 'btn-secondary'} aria-pressed={pendingOnly} onClick={togglePendingOnly}>
+          {pendingOnly ? <Icon name="check" size={18} /> : null}
+          Solo pendientes ({pendingCount})
+        </button>
+      )}
+    >
+      {/* Búsqueda: un campo principal y el resto de filtros a un clic */}
+      <form onSubmit={handleSearch} role="search" aria-label="Buscar documentos" className="card mb-6 !p-4 sm:!p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          <div className="flex-1">
+            <label className="label" htmlFor="f-beneficiary">Nombre o cédula de la persona</label>
+            <span className="hint" id="f-beneficiary-hint">Puedes escribir solo una parte. Ejemplo: Pérez o 1017</span>
             <input
-              type="text"
+              id="f-beneficiary"
+              type="search"
               className="input"
-              placeholder="Buscar nombre o cédula…"
+              aria-describedby="f-beneficiary-hint"
               value={filters.beneficiary}
               onChange={(e) => handleFilterChange('beneficiary', e.target.value)}
             />
           </div>
-
-          {/* Número de radicado */}
-          <div>
-            <label className="label">N.° de radicado</label>
-            <input
-              type="text"
-              className="input font-mono"
-              placeholder="ej. 2026-JALC12-SAL-000045"
-              value={filters.numero_radicado}
-              onChange={(e) => handleFilterChange('numero_radicado', e.target.value)}
-            />
-          </div>
-
-          {/* Fecha desde */}
-          <div>
-            <label className="label">Fecha desde</label>
-            <input
-              type="date"
-              className="input"
-              value={filters.date_from}
-              onChange={(e) => handleFilterChange('date_from', e.target.value)}
-            />
-          </div>
-
-          {/* Fecha hasta */}
-          <div>
-            <label className="label">Fecha hasta</label>
-            <input
-              type="date"
-              className="input"
-              value={filters.date_to}
-              onChange={(e) => handleFilterChange('date_to', e.target.value)}
-            />
-          </div>
-
-          {/* Estado */}
-          <div>
-            <label className="label">Estado revisión</label>
-            <select
-              className="input"
-              value={filters.reviewed}
-              onChange={(e) => handleFilterChange('reviewed', e.target.value)}
+          <div className="flex gap-2">
+            <button type="submit" className="btn-primary flex-1 md:flex-none" disabled={loading} aria-busy={loading || undefined}>
+              {loading ? <Spinner /> : <Icon name="buscar" size={18} />}
+              Buscar
+            </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              aria-expanded={showMore}
+              aria-controls="filtros-avanzados"
+              onClick={() => setShowMore((v) => !v)}
             >
-              <option value="">Todos</option>
-              <option value="false">Pendiente revisión</option>
-              <option value="true">Revisados</option>
-            </select>
+              <Icon name="filtro" size={18} />
+              Más filtros{advanced > 0 ? ` (${advanced})` : ''}
+            </button>
           </div>
         </div>
 
-        <div className="flex gap-2 mt-4">
-          <button type="submit" className="btn-primary" disabled={loading}>
-            {loading ? 'Buscando…' : 'Buscar'}
-          </button>
-          <button type="button" className="btn-secondary" onClick={handleClear}>
-            Limpiar filtros
-          </button>
-        </div>
-      </form>
-
-      {error && (
-        <p className="text-sm text-red-600 mb-4">{error}</p>
-      )}
-
-      {/* Tabla */}
-      <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-jal-blue-500 text-white">
-              <tr>
-                <th className="px-3 py-3 text-left font-medium text-xs">Radicado</th>
-                <th className="px-3 py-3 text-left font-medium text-xs hidden lg:table-cell">N.°</th>
-                <th className="px-3 py-3 text-left font-medium text-xs hidden sm:table-cell">Auxiliar</th>
-                <th className="px-3 py-3 text-left font-medium text-xs">Tipo</th>
-                <th className="px-3 py-3 text-left font-medium text-xs">Beneficiario</th>
-                <th className="px-3 py-3 text-left font-medium text-xs hidden md:table-cell">Cédula</th>
-                <th className="px-3 py-3 text-left font-medium text-xs hidden md:table-cell">Fecha</th>
-                <th className="px-3 py-3 text-left font-medium text-xs hidden sm:table-cell">Estado</th>
-                <th className="px-3 py-3 text-left font-medium text-xs">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {loading && (
-                <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-gray-400 text-sm">
-                    Cargando documentos…
-                  </td>
-                </tr>
-              )}
-              {!loading && data.data.length === 0 && (
-                <tr><EmptyState message="No se encontraron documentos con los filtros aplicados." colSpan={9} /></tr>
-              )}
-              {!loading && data.data.map((doc) => (
-                <tr
-                  key={doc.id}
-                  className={`hover:bg-gray-50 transition-colors ${
-                    !doc.reviewed && doc.sync_status === 'synced'
-                      ? 'bg-amber-50 hover:bg-amber-100'
-                      : ''
-                  }`}
-                >
-                  <td className="px-3 py-3 text-gray-700 text-xs font-mono">
-                    {doc.numero_radicado || '—'}
-                  </td>
-                  <td className="px-3 py-3 text-gray-500 text-xs font-mono hidden lg:table-cell">
-                    {doc.document_number || '—'}
-                  </td>
-                  <td className="px-3 py-3 text-gray-700 text-xs hidden sm:table-cell">
-                    {doc.author?.name || '—'}
-                  </td>
-                  <td className="px-3 py-3 text-gray-700 text-xs font-medium">
-                    {doc.doc_type_name}
-                  </td>
-                  <td className="px-3 py-3 text-gray-700 text-xs">
-                    <div>{doc.beneficiary_name}</div>
-                    <div className="text-gray-400 sm:hidden">{formatDate(doc.created_at)}</div>
-                  </td>
-                  <td className="px-3 py-3 text-gray-500 text-xs hidden md:table-cell">
-                    {doc.beneficiary_id}
-                  </td>
-                  <td className="px-3 py-3 text-gray-500 text-xs hidden md:table-cell">
-                    {formatDate(doc.created_at)}
-                  </td>
-                  <td className="px-3 py-3 hidden sm:table-cell">
-                    <StatusBadge synced={doc.sync_status} reviewed={doc.reviewed} />
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex gap-2">
-                        {['pdf', 'docx'].map((fmt) => {
-                          const key = `${doc.id}-${fmt}`;
-                          return (
-                            <button
-                              key={fmt}
-                              disabled={downloading === key}
-                              title={`Descargar ${fmt.toUpperCase()}`}
-                              className="text-jal-blue-400 hover:text-jal-blue-600 text-xs font-medium disabled:opacity-50"
-                              onClick={async () => {
-                                setDownloading(key);
-                                try {
-                                  const name = `${doc.doc_type_name}_${doc.beneficiary_id}.${fmt}`;
-                                  await downloadDocument(doc.id, fmt, token, name);
-                                } catch (e) {
-                                  setError(e.message || 'Error al descargar');
-                                } finally {
-                                  setDownloading('');
-                                }
-                              }}
-                            >
-                              {downloading === key ? '…' : fmt.toUpperCase()}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {!doc.reviewed && (
-                        <button
-                          onClick={() => handleMarkReviewed(doc.id)}
-                          className="text-xs text-green-600 hover:text-green-700 font-medium text-left"
-                          title="Marcar como revisado"
-                        >
-                          ✓ Revisar
-                        </button>
-                      )}
-                      {isAdmin && (
-                        <button
-                          onClick={() => setDeleteTarget(doc)}
-                          className="text-xs text-red-500 hover:text-red-700 font-medium text-left"
-                          title="Eliminar documento"
-                        >
-                          ✕ Eliminar
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Paginación */}
-        {data.pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
-            <p className="text-xs text-gray-500">
-              {data.total} documentos en total
-            </p>
-            <div className="flex gap-1">
-              <button
-                className="btn-secondary py-1 px-2 text-xs"
-                disabled={applied.page <= 1}
-                onClick={() => handlePage(applied.page - 1)}
-              >
-                ← Anterior
-              </button>
-              <span className="px-2 py-1 text-xs text-gray-500 flex items-center">
-                {applied.page} / {data.pages}
-              </span>
-              <button
-                className="btn-secondary py-1 px-2 text-xs"
-                disabled={applied.page >= data.pages}
-                onClick={() => handlePage(applied.page + 1)}
-              >
-                Siguiente →
-              </button>
+        {showMore && (
+          <div id="filtros-avanzados" className="anim-step mt-5 grid grid-cols-1 gap-4 border-t border-line pt-5 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <label className="label" htmlFor="f-type">Tipo de documento</label>
+              <select id="f-type" className="input" value={filters.doc_type_name} onChange={(e) => handleFilterChange('doc_type_name', e.target.value)}>
+                <option value="">Todos los tipos</option>
+                {docTypes.map((t) => <option key={t.id} value={t.name}>{t.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="f-radicado">Número de radicado</label>
+              <input
+                id="f-radicado"
+                type="text"
+                className="input font-mono"
+                placeholder="2026-JALC12-SAL-000045"
+                value={filters.numero_radicado}
+                onChange={(e) => handleFilterChange('numero_radicado', e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="f-reviewed">Revisión</label>
+              <select id="f-reviewed" className="input" value={filters.reviewed} onChange={(e) => handleFilterChange('reviewed', e.target.value)}>
+                <option value="">Todos</option>
+                <option value="false">Pendientes de revisión</option>
+                <option value="true">Ya revisados</option>
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="f-user">Hecho por</label>
+              <select id="f-user" className="input" value={filters.user_id} onChange={(e) => handleFilterChange('user_id', e.target.value)}>
+                <option value="">Cualquier persona del equipo</option>
+                {auxiliares.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label" htmlFor="f-from">Desde</label>
+              <input id="f-from" type="date" className="input" value={filters.date_from} onChange={(e) => handleFilterChange('date_from', e.target.value)} />
+            </div>
+            <div>
+              <label className="label" htmlFor="f-to">Hasta</label>
+              <input id="f-to" type="date" className="input" value={filters.date_to} min={filters.date_from || undefined} onChange={(e) => handleFilterChange('date_to', e.target.value)} />
+            </div>
+            <div className="flex flex-wrap gap-2 sm:col-span-2 lg:col-span-3">
+              <button type="submit" className="btn-primary" disabled={loading}>Aplicar filtros</button>
+              <button type="button" className="btn-secondary" onClick={handleClear}>Quitar filtros</button>
             </div>
           </div>
         )}
-      </div>
-      {/* Modal confirmación eliminar */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-start gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-800">Eliminar documento</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  ¿Estás seguro de que deseas eliminar el documento{' '}
-                  <strong>{deleteTarget.document_number}</strong> —{' '}
-                  {deleteTarget.doc_type_name} de{' '}
-                  <strong>{deleteTarget.beneficiary_name}</strong>?
-                </p>
-                <p className="text-xs text-red-600 mt-2 font-medium">Esta acción quedará registrada en auditoría.</p>
+      </form>
+
+      {actionError && <Notice tone="danger" className="mb-4">{actionError}</Notice>}
+
+      {loadError ? (
+        <Notice
+          tone="danger"
+          title="No se pudo cargar el archivo de documentos"
+          action={<button type="button" className="btn-secondary btn-sm" onClick={() => load(applied)}>Intentar de nuevo</button>}
+        >
+          {loadError}
+        </Notice>
+      ) : loading && docs.length === 0 ? (
+        <div role="status" aria-label="Cargando documentos" className="table-wrap divide-y divide-line">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-4 p-4">
+              <div className="h-10 w-10 animate-pulse rounded bg-sunken" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-1/3 animate-pulse rounded bg-sunken" />
+                <div className="h-3 w-1/2 animate-pulse rounded bg-sunken" />
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={() => setDeleteTarget(null)}
-                disabled={deleting}
-                className="btn-secondary text-sm"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleDelete}
-                disabled={deleting}
-                className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {deleting
-                  ? <><div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />Eliminando…</>
-                  : 'Sí, eliminar'}
-              </button>
-            </div>
-          </div>
+          ))}
         </div>
+      ) : docs.length === 0 ? (
+        isFiltered(applied) ? (
+          <EmptyState
+            icon="buscar"
+            title="No hay documentos con esa búsqueda"
+            message="Revisa que el nombre o la cédula estén bien escritos, o quita algunos filtros."
+            action={<button type="button" className="btn-secondary" onClick={handleClear}>Quitar filtros</button>}
+          />
+        ) : (
+          <EmptyState title="El archivo todavía está vacío" message="Cuando el equipo cree documentos, aparecerán aquí para buscarlos y revisarlos." />
+        )
+      ) : (
+        <div className={`transition-opacity duration-fast ${loading ? 'opacity-60' : ''}`} aria-busy={loading || undefined}>
+          {/* Escritorio: tabla */}
+          <div className="table-wrap hidden xl:block">
+            <table className="table">
+              <caption className="sr-only">Documentos encontrados</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Fecha</th>
+                  <th scope="col">Documento y persona</th>
+                  <th scope="col">Radicado</th>
+                  <th scope="col">Estado</th>
+                  <th scope="col"><span className="sr-only">Acciones</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {docs.map((doc) => {
+                  const pending = !doc.reviewed && doc.sync_status === 'synced';
+                  return (
+                    <tr key={doc.id} className={pending ? '!bg-warning-bg/50' : ''}>
+                      <td className="whitespace-nowrap">{formatDate(doc.created_at)}</td>
+                      <td>
+                        <p className="font-semibold">{doc.doc_type_name}</p>
+                        <p className="text-ink-muted">
+                          {doc.beneficiary_name}{doc.beneficiary_id ? ` · C.C. ${doc.beneficiary_id}` : ''}
+                          {doc.author?.name ? ` · por ${doc.author.name}` : ''}
+                        </p>
+                      </td>
+                      <td>{doc.numero_radicado ? <Radicado value={doc.numero_radicado} label="" /> : <span className="text-ink-muted">—</span>}</td>
+                      <td><DocumentStatus syncStatus={doc.sync_status} reviewed={doc.reviewed} /></td>
+                      <td className="text-right">
+                        <DocActions
+                          doc={doc}
+                          downloading={downloading}
+                          onDownload={handleDownload}
+                          onReview={handleMarkReviewed}
+                          reviewing={reviewing}
+                          onDelete={isAdmin ? setDeleteTarget : undefined}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Móvil y tablet: fichas apiladas, misma información y acciones */}
+          <ul className="space-y-3 xl:hidden">
+            {docs.map((doc) => (
+              <li key={doc.id} className="card !p-4">
+                <div className="flex gap-4">
+                  <LedgerDate iso={doc.created_at} />
+                  <div className="min-w-0 flex-1">
+                    <p className="title-card">{doc.doc_type_name}</p>
+                    <p className="text-ink-muted">{doc.beneficiary_name}{doc.beneficiary_id ? ` · C.C. ${doc.beneficiary_id}` : ''}</p>
+                    {doc.author?.name && <p className="text-[0.9375rem] text-ink-muted">Hecho por {doc.author.name}</p>}
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <DocumentStatus syncStatus={doc.sync_status} reviewed={doc.reviewed} />
+                      <Radicado value={doc.numero_radicado} />
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 border-t border-line pt-3">
+                  <DocActions
+                    doc={doc}
+                    downloading={downloading}
+                    onDownload={handleDownload}
+                    onReview={handleMarkReviewed}
+                    reviewing={reviewing}
+                    onDelete={isAdmin ? setDeleteTarget : undefined}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          {data.pages > 1 && (
+            <nav aria-label="Páginas de resultados" className="mt-4 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-ink-muted">Página {applied.page} de {data.pages} · {data.total} documentos</p>
+              <div className="flex gap-2">
+                <button type="button" className="btn-secondary btn-sm" disabled={applied.page <= 1 || loading} onClick={() => apply({ ...applied, page: applied.page - 1 })}>
+                  ← Anterior
+                </button>
+                <button type="button" className="btn-secondary btn-sm" disabled={applied.page >= data.pages || loading} onClick={() => apply({ ...applied, page: applied.page + 1 })}>
+                  Siguiente →
+                </button>
+              </div>
+            </nav>
+          )}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          danger
+          busy={deleting}
+          title="¿Eliminar este documento?"
+          message={`${deleteTarget.doc_type_name} de ${deleteTarget.beneficiary_name}${deleteTarget.numero_radicado ? ` (radicado ${deleteTarget.numero_radicado})` : ''}. Dejará de estar en el archivo y la acción queda registrada en Auditoría.`}
+          confirmLabel={deleting ? 'Eliminando…' : 'Sí, eliminar'}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </AppLayout>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { useSyncStore } from '../stores/syncStore';
@@ -8,6 +8,15 @@ import { useEdiles } from '../hooks/useEdiles';
 import DynamicForm from '../components/forms/DynamicForm';
 import AppLayout from '../components/ui/AppLayout';
 import EmptyState from '../components/ui/EmptyState';
+import PageHeader from '../components/ui/PageHeader';
+import Steps from '../components/ui/Steps';
+import Notice from '../components/ui/Notice';
+import Radicado from '../components/ui/Radicado';
+import Spinner from '../components/ui/Spinner';
+import Icon from '../components/ui/Icon';
+import { ConfirmDialog } from '../components/ui/Dialog';
+import DocTypeCard from '../components/documents/DocTypeCard';
+import { SkeletonCard } from '../components/ui/Skeleton';
 
 const STEPS = { SELECT: 'select', FORM: 'form', RESULT: 'result' };
 
@@ -32,6 +41,20 @@ function personFills(fields, values, person) {
     if (key && person[key] && !values[f.name]) fills[f.name] = person[key];
   }
   return fills;
+}
+
+const isPersonField = (f) => ID_FIELD.test(f.name) || Object.values(PERSON_FIELDS).some((re) => re.test(f.name))
+  || /^(direccion|barrio|telefono|celular|correo)$/i.test(f.name);
+
+// Bloques del formulario: primero quién es la persona, después lo propio del documento.
+function fieldSections(fields = []) {
+  const person = fields.filter(isPersonField).map((f) => f.name);
+  const rest = fields.filter((f) => !isPersonField(f)).map((f) => f.name);
+  if (!person.length || !rest.length) return undefined;
+  return [
+    { title: 'Datos de la persona', names: person },
+    { title: 'Datos del documento', names: rest },
+  ];
 }
 
 function initialValues(type) {
@@ -140,7 +163,6 @@ export default function GeneratorPage() {
     }
     setError('');
     setReviewing(true);
-    window.scrollTo(0, 0);
   }
 
   async function handleGenerate() {
@@ -171,14 +193,27 @@ export default function GeneratorPage() {
     }
   }
 
-  function handleCancel() {
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const hasTypedData = step === STEPS.FORM && !!selectedType && (() => {
     const initial = initialValues(selectedType);
-    const hasData = Object.entries(formValues).some(([k, v]) => v && v !== initial[k]);
-    if (hasData && !window.confirm('¿Salir sin crear el documento? Se perderán los datos que escribiste.')) return;
+    return Object.entries(formValues).some(([k, v]) => v && v !== initial[k]);
+  })();
+
+  function handleCancel() {
+    if (hasTypedData) { setConfirmLeave(true); return; }
     handleReset();
   }
 
+  // Si cierra o recarga la pestaña con datos escritos, el navegador pregunta antes
+  useEffect(() => {
+    if (!hasTypedData) return undefined;
+    const onBeforeUnload = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [hasTypedData]);
+
   function handleReset() {
+    setConfirmLeave(false);
     setReviewing(false);
     setStep(STEPS.SELECT);
     setSelectedType(null);
@@ -198,86 +233,90 @@ export default function GeneratorPage() {
     cacheEdilSignature(selectedEdilId, token);
   }, [selectedEdilId, token]);
 
-  const stepLabels = [
-    [STEPS.SELECT, '1. Elegir documento'],
-    [STEPS.FORM, reviewing ? '2. Revisar datos' : '2. Escribir datos'],
-    [STEPS.RESULT, '3. Listo'],
-  ];
+  const currentStep = step === STEPS.SELECT ? 0 : step === STEPS.RESULT ? 3 : reviewing ? 2 : 1;
+
+  // Al cambiar de paso: subir y llevar el foco al título para que el lector de pantalla lo anuncie
+  const headingRef = useRef(null);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return; }
+    window.scrollTo(0, 0);
+    headingRef.current?.querySelector('h1')?.focus();
+  }, [currentStep]);
+
+  const header = {
+    0: { eyebrow: 'Crear documento · Paso 1 de 4', title: '¿Qué documento necesitas hacer?', description: 'Elige uno. Te pediremos solo los datos que lleva.' },
+    1: { eyebrow: 'Crear documento · Paso 2 de 4', title: selectedType?.name, description: 'Escribe los datos. Podrás revisarlos antes de crear el documento.' },
+    2: { eyebrow: 'Crear documento · Paso 3 de 4', title: 'Revisa que todo esté bien', description: 'Así saldrá en el documento. Al crearlo se le asigna un número de radicado.' },
+    3: { eyebrow: 'Crear documento · Listo', title: result?.offline ? 'Documento creado en este equipo' : 'Documento creado y guardado', description: null },
+  }[currentStep];
 
   return (
-    <AppLayout title="Crear documento">
-      <div className="max-w-3xl">
-      {/* Pasos */}
-      <ol className="flex items-center gap-2 text-sm text-gray-500 mb-6 flex-wrap" aria-label="Pasos">
-        {stepLabels.map(([key, label], i) => (
-          <li key={key} className="flex items-center gap-2">
-            {i > 0 && <span aria-hidden="true">›</span>}
-            <span className={step === key ? 'text-jal-blue-600 font-semibold' : ''} aria-current={step === key ? 'step' : undefined}>
-              {label}
-            </span>
-          </li>
-        ))}
-      </ol>
+    <AppLayout title="Crear documento" header={false} width="narrow">
+      <div ref={headingRef} className="[&_h1]:focus:outline-none [&_h1]:scroll-mt-24">
+        <PageHeader eyebrow={header.eyebrow} title={header.title || 'Crear documento'} description={header.description} />
+      </div>
+      <div className="mb-8">
+        <Steps steps={['Documento', 'Datos', 'Revisión', 'Listo']} current={currentStep} />
+      </div>
+
+      {confirmLeave && (
+        <ConfirmDialog
+          title="¿Salir sin crear el documento?"
+          message="Se perderán los datos que escribiste en este formulario."
+          confirmLabel="Sí, salir"
+          cancelLabel="Seguir escribiendo"
+          danger
+          onConfirm={handleReset}
+          onCancel={() => setConfirmLeave(false)}
+        />
+      )}
 
       {/* PASO 1 — Elegir tipo */}
       {step === STEPS.SELECT && (
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">¿Qué documento necesitas hacer?</h2>
+        <div key="select" className="anim-step">
           {loadingTypes ? (
-            <p className="text-gray-500">Cargando…</p>
+            <div className="grid gap-4 sm:grid-cols-2">{[0, 1].map((i) => <SkeletonCard key={i} rows={2} />)}</div>
           ) : docTypes.length === 0 ? (
-            <EmptyState message="Todavía no hay documentos configurados. Pide al administrador que los agregue." />
+            <EmptyState title="Todavía no hay documentos configurados" message="Pide al administrador de la JAL que los agregue." />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {docTypes.map((type) => (
-                <button
-                  key={type.id}
-                  type="button"
-                  onClick={() => handleSelectType(type)}
-                  className="card !p-5 text-left flex items-center justify-between gap-3 text-lg font-semibold text-jal-blue-600
-                             hover:border-jal-blue-400 hover:bg-jal-blue-50 focus:outline-none focus:ring-2 focus:ring-jal-blue-400"
-                >
-                  <span>{type.name}</span>
-                  <span aria-hidden="true" className="text-2xl">›</span>
-                </button>
+            <ul className="grid gap-4 sm:grid-cols-2">
+              {docTypes.map((type, i) => (
+                <li key={type.id} className="flex"><DocTypeCard type={type} index={i} onSelect={handleSelectType} /></li>
               ))}
-            </div>
+            </ul>
           )}
           {(typeError || error) && (
-            <p role="alert" className="text-red-700 mt-4">
+            <Notice tone="danger" className="mt-4">
               {typeError ? 'No se pudo cargar la lista de documentos. Recarga la página para intentarlo de nuevo.' : error}
-            </p>
+            </Notice>
           )}
         </div>
       )}
 
-      {/* PASO 2 — Datos y revisión */}
+      {/* PASO 2 y 3 — Datos y revisión */}
       {step === STEPS.FORM && selectedType && (
-        <div>
-          <div className="mb-6">
-            <button type="button" onClick={handleCancel} className="text-jal-blue-600 underline min-h-[44px]" disabled={generating}>
-              ← Elegir otro documento
-            </button>
-            <h2 className="text-2xl font-bold text-gray-900 mt-1">{selectedType.name}</h2>
-          </div>
-
+        <div key={reviewing ? 'review' : 'form'} className="anim-step space-y-6">
           {!isOnline && (
-            <div className="bg-amber-50 border border-amber-300 rounded-lg px-4 py-3 text-amber-900 mb-4">
-              Estás sin conexión. El documento se creará en este equipo y podrás descargarlo de una vez.
-              Se enviará al sistema cuando vuelva internet.
-            </div>
+            <Notice tone="info" title="Estás sin conexión">
+              El documento se creará en este equipo y podrás descargarlo de una vez. Se enviará al sistema cuando vuelva internet.
+            </Notice>
           )}
 
           {!reviewing ? (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" noValidate>
+              <button type="button" onClick={handleCancel} className="btn-ghost btn-sm -ml-3" disabled={generating}>
+                <Icon name="atras" size={18} /> Elegir otro documento
+              </button>
+
               {isAuxiliar && ediles.length > 0 && (
                 <div className="card">
-                  <label className="label" htmlFor="edil_select">
-                    ¿A nombre de qué edil sale el documento?
-                  </label>
+                  <label className="label" htmlFor="edil_select">¿A nombre de qué edil sale el documento?</label>
+                  <span className="hint" id="edil_hint">Si sale a tu nombre, deja «Ninguno».</span>
                   <select
                     id="edil_select"
                     className="input"
+                    aria-describedby="edil_hint"
                     value={selectedEdilId}
                     onChange={(e) => setSelectedEdilId(e.target.value)}
                   >
@@ -289,7 +328,7 @@ export default function GeneratorPage() {
                     ))}
                   </select>
                   {selectedEdil && (
-                    <p className="text-sm text-gray-700 mt-2">
+                    <p className="mt-2 text-ink">
                       Saldrá a nombre de <strong>{selectedEdil.name}</strong>, que recibirá un aviso para revisarlo.
                     </p>
                   )}
@@ -297,10 +336,13 @@ export default function GeneratorPage() {
               )}
 
               {(selectedType.fields?.length ?? 0) > 0 && (
-                <div className="card">
-                  <p className="text-gray-600 mb-4">Los campos con <span className="text-red-600 font-semibold">*</span> son obligatorios.</p>
+                <div className="sheet p-5 sm:p-8">
+                  <p className="mb-6 text-ink-muted">
+                    Los campos con <span className="font-semibold text-danger-fg">*</span> son obligatorios.
+                  </p>
                   <DynamicForm
                     fields={selectedType.fields}
+                    sections={fieldSections(selectedType.fields)}
                     values={formValues}
                     onChange={handleFieldChange}
                     disabled={generating}
@@ -311,66 +353,74 @@ export default function GeneratorPage() {
               )}
 
               {Object.keys(fills).length > 0 && (
-                <div role="status" className="bg-jal-blue-50 border border-jal-blue-200 rounded-lg px-4 py-3 text-gray-900 flex flex-wrap items-center gap-3">
-                  <p className="flex-1 min-w-[12rem]">
-                    Ya atendimos a <strong>{person.nombre}</strong> con este número. ¿Usar sus datos guardados?
-                  </p>
-                  <button type="button" className="btn-primary" onClick={() => { setFormValues((prev) => ({ ...prev, ...fills })); setPerson(null); }}>
-                    Usar sus datos
-                  </button>
-                  <button type="button" className="btn-secondary" onClick={() => setPerson(null)}>No, gracias</button>
-                </div>
+                <Notice
+                  tone="info"
+                  title={<>Ya atendimos a {person.nombre} con este número.</>}
+                  action={
+                    <>
+                      <button type="button" className="btn-primary btn-sm" onClick={() => { setFormValues((prev) => ({ ...prev, ...fills })); setPerson(null); }}>
+                        Usar sus datos
+                      </button>
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => setPerson(null)}>No, gracias</button>
+                    </>
+                  }
+                >
+                  ¿Llenamos los campos vacíos con sus datos guardados? Revisa que sigan iguales.
+                </Notice>
               )}
 
               {submitAttempted && hasDynErrors && (
-                <p role="alert" className="text-red-700">Falta completar o corregir algunos datos. Están marcados en rojo.</p>
+                <Notice tone="danger">Falta completar o corregir algunos datos. Están marcados en rojo, junto a cada campo.</Notice>
               )}
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 border-t border-line pt-6">
                 <button type="submit" className="btn-primary">Revisar antes de crear</button>
-                <button type="button" className="btn-secondary" onClick={handleCancel}>Cancelar</button>
+                <button type="button" className="btn-ghost" onClick={handleCancel}>Cancelar</button>
               </div>
             </form>
           ) : (
             <div className="space-y-6">
-              <div className="card">
-                <h3 className="text-xl font-bold text-gray-900">Revisa que todo esté bien</h3>
-                <p className="text-gray-600 mt-1 mb-4">Así saldrá en el documento. Al crearlo se le asigna un número de radicado.</p>
-                <dl className="divide-y divide-gray-200">
+              <article className="sheet px-5 py-6 sm:px-10 sm:py-8">
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <h2 className="title-section">{selectedType.name}</h2>
+                  <Radicado label="Borrador" value="sin radicar" />
+                </div>
+                <dl>
                   {selectedEdil && (
-                    <div className="py-2 sm:grid sm:grid-cols-3 sm:gap-4">
-                      <dt className="text-gray-600">A nombre de</dt>
-                      <dd className="font-semibold text-gray-900 sm:col-span-2">{selectedEdil.name}</dd>
+                    <div className="border-t border-line py-3 sm:grid sm:grid-cols-3 sm:gap-6">
+                      <dt className="text-ink-muted">A nombre de</dt>
+                      <dd className="font-semibold text-ink sm:col-span-2">{selectedEdil.name}</dd>
                     </div>
                   )}
                   {(selectedType.fields ?? []).map((f) => (
-                    <div key={f.name} className="py-2 sm:grid sm:grid-cols-3 sm:gap-4">
-                      <dt className="text-gray-600">{f.label}</dt>
-                      <dd className="font-semibold text-gray-900 sm:col-span-2 break-words whitespace-pre-line">
+                    <div key={f.name} className="border-t border-line py-3 sm:grid sm:grid-cols-3 sm:gap-6">
+                      <dt className="text-ink-muted">{f.label}</dt>
+                      <dd className="font-semibold text-ink sm:col-span-2 break-words whitespace-pre-line">
                         {displayValue(f, formValues[f.name])}
                       </dd>
                     </div>
                   ))}
                 </dl>
-              </div>
+              </article>
 
               {error && (
-                <div role="alert" className="text-red-800 bg-red-50 border border-red-300 rounded-lg px-4 py-3">
+                <Notice tone="danger" title="No se pudo crear el documento">
                   {error}
                   {signatureMissing && (
                     selectedEdilId ? (
                       <p className="mt-1">Pídele al edil que inicie sesión y suba su firma desde <strong>Mi perfil</strong>.</p>
                     ) : (
                       <p className="mt-1">
-                        <Link to="/perfil" className="font-semibold underline">Ir a Mi perfil para subir tu firma →</Link>
+                        <Link to="/perfil" className="link">Ir a Mi perfil para subir tu firma</Link>
                       </p>
                     )
                   )}
-                </div>
+                </Notice>
               )}
 
               <div className="flex flex-wrap gap-3">
-                <button type="button" className="btn-primary" onClick={handleGenerate} disabled={generating}>
+                <button type="button" className="btn-primary" onClick={handleGenerate} disabled={generating} aria-busy={generating || undefined}>
+                  {generating && <Spinner />}
                   {generating ? 'Creando el documento…' : 'Sí, crear el documento'}
                 </button>
                 <button type="button" className="btn-secondary" onClick={() => { setReviewing(false); setError(''); }} disabled={generating}>
@@ -382,79 +432,79 @@ export default function GeneratorPage() {
         </div>
       )}
 
-      {/* PASO 3 — Resultado */}
+      {/* PASO 4 — Resultado: solo se muestra cuando el sistema confirmó la creación */}
       {step === STEPS.RESULT && result && (
-        <div className="space-y-6">
-          <div className="card border-green-300 bg-green-50" role="status">
-            <p className="text-xl font-bold text-green-900">
-              {result.offline ? '✓ Documento creado en este equipo' : '✓ Documento creado y guardado'}
-            </p>
-            <p className="text-green-900 mt-1">
-              <strong>{selectedType?.name}</strong>{result.beneficiaryName ? ` — ${result.beneficiaryName}` : ''}
-            </p>
-            {selectedEdil && <p className="text-green-900">A nombre de <strong>{selectedEdil.name}</strong></p>}
-            {result.numero_radicado && <p className="text-green-900 mt-1">Radicado <strong className="font-mono">{result.numero_radicado}</strong></p>}
-            {result.document_number && <p className="text-green-900">N.° <strong className="font-mono">{result.document_number}</strong></p>}
-            <p className="text-green-900 mt-3">
-              {result.offline
-                ? 'Se enviará al sistema cuando vuelva internet. Mientras tanto, descárgalo aquí.'
-                : <>Quedó guardado en el sistema. Lo encuentras cuando quieras en <Link to="/inicio" className="underline font-semibold">Inicio › Mis documentos recientes</Link>.</>}
-            </p>
-          </div>
+        <div key="result" className="anim-step space-y-6">
+          <Notice tone={result.offline ? 'info' : 'success'} title={result.offline ? 'Guardado en este equipo, pendiente de enviar' : 'Quedó guardado en el sistema'}>
+            {result.offline
+              ? 'Se enviará al sistema cuando vuelva internet. Mientras tanto, descárgalo aquí.'
+              : <>Lo encuentras cuando quieras en <Link to="/inicio" className="link">Inicio › Mis documentos recientes</Link>.</>}
+          </Notice>
 
-          {result?.id && (
-            <div className="card">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Descargar</h3>
-              {result.offline && result.offlineBlobError && (
-                <p className="text-amber-800 mb-3">
-                  No se pudo preparar el archivo en este equipo ({result.offlineBlobError}). Podrás descargarlo cuando vuelva internet.
-                </p>
-              )}
-              <div className="flex flex-wrap gap-3">
-                {['pdf', 'docx'].map((fmt) => {
-                  const hasOfflineBlob = result.offline && result.offlineBlobs?.[fmt];
-                  const hasOnline = !result.offline;
-                  if (!hasOfflineBlob && !hasOnline) return null;
-                  return (
-                    <button
-                      key={fmt}
-                      type="button"
-                      disabled={!!downloading}
-                      onClick={async () => {
-                        setDownloading(fmt);
-                        setError('');
-                        try {
-                          const name = `${selectedType?.name}_${result.beneficiaryName}.${fmt}`;
-                          if (hasOfflineBlob) {
-                            const { triggerBlobDownload } = await import('../services/clientDocumentGenerator');
-                            triggerBlobDownload(result.offlineBlobs[fmt], name);
-                          } else {
-                            await downloadDocument(result.id, fmt, token, name);
-                          }
-                        } catch {
-                          setError('No se pudo descargar. El documento sigue guardado; inténtalo de nuevo.');
-                        } finally {
-                          setDownloading('');
-                        }
-                      }}
-                      className={fmt === 'pdf' ? 'btn-primary' : 'btn-secondary'}
-                    >
-                      {downloading === fmt ? 'Descargando…' : fmt === 'pdf' ? 'Descargar PDF (para imprimir)' : 'Descargar Word (para editar)'}
-                    </button>
-                  );
-                })}
-              </div>
-              {error && <p role="alert" className="text-red-700 mt-3">{error}</p>}
+          <article className="sheet px-5 py-6 sm:px-10 sm:py-8">
+            <h2 className="title-section">{selectedType?.name}</h2>
+            {result.beneficiaryName && <p className="text-ink-muted">{result.beneficiaryName}</p>}
+            {selectedEdil && <p className="text-ink">A nombre de <strong>{selectedEdil.name}</strong></p>}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {result.numero_radicado && <Radicado value={result.numero_radicado} stamp />}
+              {result.document_number && <span className="text-ink-muted">N.° <strong className="font-mono text-ink">{result.document_number}</strong></span>}
             </div>
-          )}
+
+            {result?.id && (
+              <div className="mt-6 border-t border-line pt-6">
+                <h3 className="mb-3 font-semibold text-ink">Descargar</h3>
+                {result.offline && result.offlineBlobError && (
+                  <Notice tone="warning" className="mb-3">
+                    No se pudo preparar el archivo en este equipo ({result.offlineBlobError}). Podrás descargarlo cuando vuelva internet.
+                  </Notice>
+                )}
+                <div className="flex flex-wrap gap-3">
+                  {['pdf', 'docx'].map((fmt) => {
+                    const hasOfflineBlob = result.offline && result.offlineBlobs?.[fmt];
+                    const hasOnline = !result.offline;
+                    if (!hasOfflineBlob && !hasOnline) return null;
+                    return (
+                      <button
+                        key={fmt}
+                        type="button"
+                        disabled={!!downloading}
+                        aria-busy={downloading === fmt || undefined}
+                        onClick={async () => {
+                          setDownloading(fmt);
+                          setError('');
+                          try {
+                            const name = `${selectedType?.name}_${result.beneficiaryName}.${fmt}`;
+                            if (hasOfflineBlob) {
+                              const { triggerBlobDownload } = await import('../services/clientDocumentGenerator');
+                              triggerBlobDownload(result.offlineBlobs[fmt], name);
+                            } else {
+                              await downloadDocument(result.id, fmt, token, name);
+                            }
+                          } catch {
+                            setError('No se pudo descargar. El documento sigue guardado; inténtalo de nuevo.');
+                          } finally {
+                            setDownloading('');
+                          }
+                        }}
+                        className={fmt === 'pdf' ? 'btn-primary' : 'btn-secondary'}
+                      >
+                        {downloading === fmt ? <Spinner /> : <Icon name="descargar" size={18} />}
+                        {downloading === fmt ? 'Descargando…' : fmt === 'pdf' ? 'Descargar PDF (para imprimir)' : 'Descargar Word (para editar)'}
+                      </button>
+                    );
+                  })}
+                </div>
+                {error && <Notice tone="danger" className="mt-3">{error}</Notice>}
+              </div>
+            )}
+          </article>
 
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={handleReset} className="btn-secondary">Crear otro documento</button>
-            <Link to="/inicio" className="btn-secondary">Volver al inicio</Link>
+            <Link to="/inicio" className="btn-ghost">Volver al inicio</Link>
           </div>
         </div>
       )}
-      </div>
     </AppLayout>
   );
 }

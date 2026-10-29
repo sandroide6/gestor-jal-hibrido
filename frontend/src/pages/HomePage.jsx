@@ -7,10 +7,22 @@ import { useAsync } from '../hooks/useAsync';
 import { fetchMyDocuments, downloadDocument } from '../services/documentService';
 import { fetchPendingCount } from '../services/edilService';
 import { getProfile } from '../services/profileService';
-import { formatDate } from '../utils/format';
 import AppLayout from '../components/ui/AppLayout';
+import DocTypeCard from '../components/documents/DocTypeCard';
+import DocumentRow from '../components/documents/DocumentRow';
+import Notice from '../components/ui/Notice';
+import EmptyState from '../components/ui/EmptyState';
+import { SkeletonCard } from '../components/ui/Skeleton';
+import Icon from '../components/ui/Icon';
 
-// Pantalla de inicio por tareas: crear un documento o encontrar uno ya hecho, sin pasar por menús.
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Buenos días' : h < 19 ? 'Buenas tardes' : 'Buenas noches';
+}
+
+const today = () => new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' });
+
+// Inicio por tareas: dónde estoy, qué documento hago y dónde quedó lo que ya hice.
 export default function HomePage() {
   const { token, user, hasRole } = useAuthStore();
   const { isOnline } = useSyncStore();
@@ -20,7 +32,7 @@ export default function HomePage() {
   const docTypes = allTypes.filter((t) => t.active);
 
   const [limit, setLimit] = useState(10);
-  const { data: mine, loading: loadingMine, error: mineError } = useAsync(
+  const { data: mine, loading: loadingMine, error: mineError, reload: reloadMine } = useAsync(
     () => fetchMyDocuments(limit, token), [limit, token]
   );
   const { data: pending } = useAsync(
@@ -49,103 +61,91 @@ export default function HomePage() {
   const docs = mine?.data ?? [];
 
   return (
-    <AppLayout title="Inicio">
-      <div className="max-w-4xl space-y-10">
+    <AppLayout
+      title="Inicio"
+      eyebrow={`Inicio · ${today()}`}
+      heading={`${greeting()}${firstName ? `, ${firstName}` : ''}. ¿Qué documento necesitas hacer?`}
+      description="Elige uno. Te pediremos solo los datos que lleva y podrás revisarlos antes de crearlo."
+    >
+      <div className="space-y-12">
         {profile && !profile.has_firma && (
-          <div role="status" className="bg-amber-50 border border-amber-300 rounded-xl px-5 py-4 text-amber-900">
-            <p className="font-semibold">Antes de crear tu primer documento: registra tu firma.</p>
-            <p className="mt-1">Se hace una sola vez y es necesaria para los documentos que salen a tu nombre.</p>
-            <Link to="/perfil" className="btn-primary mt-3">Registrar mi firma</Link>
-          </div>
+          <Notice
+            tone="warning"
+            title="Antes de crear tu primer documento, registra tu firma"
+            action={<Link to="/perfil" className="btn-primary btn-sm">Registrar mi firma</Link>}
+          >
+            Se hace una sola vez y es necesaria para los documentos que salen a tu nombre.
+          </Notice>
+        )}
+
+        {canReview && pending > 0 && (
+          <Notice
+            tone="info"
+            title={`${pending} documento${pending === 1 ? '' : 's'} esperando tu revisión`}
+            action={<Link to="/edil?pendientes=1" className="btn-secondary btn-sm">Revisarlos ahora</Link>}
+          />
         )}
 
         <section aria-labelledby="crear">
-          <h2 id="crear" className="text-2xl font-bold text-gray-900">
-            {firstName ? `Hola, ${firstName}. ` : ''}¿Qué documento necesitas hacer?
-          </h2>
-          <p className="text-gray-600 mt-1 mb-5">Elige uno. Te pediremos solo los datos que lleva.</p>
-
+          <h2 id="crear" className="sr-only">Crear un documento</h2>
           {loadingTypes ? (
-            <p className="text-gray-500">Cargando…</p>
-          ) : typesError ? (
-            <p role="alert" className="text-red-700">No se pudo cargar la lista de documentos. Recarga la página para intentarlo de nuevo.</p>
-          ) : docTypes.length === 0 ? (
-            <p className="text-gray-600">Todavía no hay documentos configurados. Pide al administrador que los agregue.</p>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {docTypes.map((type) => (
-                <Link
-                  key={type.id}
-                  to={`/generador?tipo=${type.id}`}
-                  className="card !p-5 flex items-center justify-between gap-3 text-lg font-semibold text-jal-blue-600
-                             hover:border-jal-blue-400 hover:bg-jal-blue-50 focus:outline-none focus:ring-2 focus:ring-jal-blue-400"
-                >
-                  <span>{type.name}</span>
-                  <span aria-hidden="true" className="text-2xl">›</span>
-                </Link>
-              ))}
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {[0, 1, 2].map((i) => <SkeletonCard key={i} rows={2} />)}
             </div>
+          ) : typesError ? (
+            <Notice tone="danger" title="No se pudo cargar la lista de documentos">
+              Revisa la conexión y recarga la página.
+            </Notice>
+          ) : docTypes.length === 0 ? (
+            <EmptyState
+              title="Todavía no hay documentos configurados"
+              message={hasRole('administrador') ? 'Agrega el primero en Tipos de documento.' : 'Pide al administrador de la JAL que los agregue.'}
+              action={hasRole('administrador') && <Link to="/admin/tipos-documento" className="btn-primary">Ir a Tipos de documento</Link>}
+            />
+          ) : (
+            <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {docTypes.map((type, i) => (
+                <li key={type.id} className="flex">
+                  <DocTypeCard type={type} index={i} to={`/generador?tipo=${type.id}`} />
+                </li>
+              ))}
+            </ul>
           )}
         </section>
 
-        {canReview && (
-          <section className="card !p-5 flex flex-wrap items-center justify-between gap-4">
-            <p className="text-gray-800">
-              {pending > 0
-                ? <><strong>{pending}</strong> documento{pending === 1 ? '' : 's'} esperando tu revisión.</>
-                : 'Puedes buscar y revisar todos los documentos de la JAL.'}
-            </p>
-            <Link to="/edil" className="btn-primary">Buscar y revisar documentos</Link>
-          </section>
-        )}
-
         <section aria-labelledby="recientes">
-          <h2 id="recientes" className="text-xl font-bold text-gray-900">Mis documentos recientes</h2>
-          <p className="text-gray-600 mt-1 mb-4">
-            Todo lo que creas queda guardado en el sistema. Desde aquí lo vuelves a descargar o imprimir.
-          </p>
+          <div className="mb-2 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 id="recientes" className="title-section">Mis documentos recientes</h2>
+              <p className="text-ink-muted">Todo lo que creas queda guardado. Desde aquí lo vuelves a descargar o imprimir.</p>
+            </div>
+            {canReview && (
+              <Link to="/edil" className="btn-ghost btn-sm"><Icon name="buscar" size={18} />Buscar en todo el archivo</Link>
+            )}
+          </div>
 
-          {downloadError && (
-            <p role="alert" className="mb-3 text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">{downloadError}</p>
-          )}
+          {downloadError && <Notice tone="danger" className="my-3">{downloadError}</Notice>}
 
           {loadingMine && docs.length === 0 ? (
-            <p className="text-gray-500">Cargando…</p>
+            <p role="status" className="py-6 text-ink-muted">Cargando tus documentos…</p>
           ) : mineError ? (
-            <p className="text-gray-600">
-              {isOnline
-                ? 'No se pudo cargar tu lista de documentos. Recarga la página para intentarlo de nuevo.'
-                : 'Sin conexión: la lista aparecerá cuando vuelva internet. Igual puedes crear documentos.'}
-            </p>
+            <Notice
+              tone={isOnline ? 'danger' : 'warning'}
+              title={isOnline ? 'No se pudo cargar tu lista de documentos' : 'Sin conexión'}
+              action={isOnline && <button type="button" className="btn-secondary btn-sm" onClick={reloadMine}>Intentar de nuevo</button>}
+              className="mt-3"
+            >
+              {isOnline ? 'Puede ser un problema momentáneo del servidor.' : 'La lista aparecerá cuando vuelva internet. Igual puedes crear documentos.'}
+            </Notice>
           ) : docs.length === 0 ? (
-            <p className="text-gray-600">Aún no has creado documentos. Cuando crees uno, aparecerá aquí.</p>
+            <EmptyState
+              compact
+              message="Aún no has creado documentos. Cuando crees uno, aparecerá aquí con su número de radicado."
+            />
           ) : (
-            <ul className="card !p-0 divide-y divide-gray-200">
+            <ul className="border-b border-line">
               {docs.map((doc) => (
-                <li key={doc.id} className="p-4 flex flex-wrap items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-900">{doc.doc_type_name}</p>
-                    <p className="text-gray-700">{doc.beneficiary_name}{doc.beneficiary_id ? ` · C.C. ${doc.beneficiary_id}` : ''}</p>
-                    <p className="text-sm text-gray-600">
-                      {formatDate(doc.created_at)}
-                      {doc.numero_radicado ? ` · Radicado ${doc.numero_radicado}` : ''}
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    {['pdf', 'docx'].map((fmt) => (
-                      <button
-                        key={fmt}
-                        type="button"
-                        className="btn-secondary"
-                        disabled={!!downloading}
-                        onClick={() => handleDownload(doc, fmt)}
-                        aria-label={`Descargar ${fmt === 'pdf' ? 'PDF' : 'Word'} de ${doc.doc_type_name}, ${doc.beneficiary_name}`}
-                      >
-                        {downloading === `${doc.id}-${fmt}` ? 'Descargando…' : fmt === 'pdf' ? 'PDF' : 'Word'}
-                      </button>
-                    ))}
-                  </div>
-                </li>
+                <DocumentRow key={doc.id} doc={doc} downloading={downloading} onDownload={handleDownload} />
               ))}
             </ul>
           )}

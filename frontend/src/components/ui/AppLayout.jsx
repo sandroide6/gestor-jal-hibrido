@@ -1,164 +1,75 @@
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useAuthStore } from '../../stores/authStore';
-import { useSyncStore } from '../../stores/syncStore';
 import { useSyncManager } from '../../hooks/useSyncManager';
 import SyncProgressBanner from './SyncProgressBanner';
+import ServerStatusBanner from './ServerStatusBanner';
 import ChangePasswordModal from './ChangePasswordModal';
 import NotificationBell from './NotificationBell';
+import ConnectionStatus from './ConnectionStatus';
+import PageHeader from './PageHeader';
 import ChatWidget from './ChatWidget';
+import Icon from './Icon';
 import { ROLE_LABEL } from '../../constants';
 
-// ── Iconos SVG ────────────────────────────────────────────
-function Icon({ d, d2 }) {
-  return (
-    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d={d} />
-      {d2 && <path strokeLinecap="round" strokeLinejoin="round" d={d2} />}
-    </svg>
-  );
-}
+const JAL_NAME = import.meta.env.VITE_JAL_NOMBRE || 'JAL Comuna 12 · La América';
 
-const ICONS = {
-  generar:    'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-  resumen:    'M4 6h16M4 12h16M4 18h7',
-  documentos: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z',
-  panel:      'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-  usuarios:   'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z',
-  tipos:      'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01',
-  reportes:   'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-  auditoria:  'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z',
-  config:     'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z',
-  ayuda:      'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-  backup:     'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12',
-};
-
-// ── Definición de rutas ────────────────────────────────────
+// ── Mapa de navegación ─────────────────────────────────────
+// Dos grupos: el trabajo de todos los días y la administración. Cada elemento declara
+// los roles que lo ven; las rutas protegidas siguen validándose en App.jsx (RoleGuard).
 const NAV_GROUPS = [
   {
-    label: 'Principal',
+    label: 'Trabajo diario',
     items: [
-      { path: '/inicio',    label: 'Inicio',            icon: ICONS.panel,      roles: ['auxiliar', 'administrador', 'edil'] },
-      { path: '/generador', label: 'Crear documento',   icon: ICONS.generar,    roles: ['auxiliar', 'administrador', 'edil'] },
-      { path: '/edil',      label: 'Buscar documentos', icon: ICONS.documentos, roles: ['edil', 'administrador'] },
-      { path: '/reportes',  label: 'Reportes',          icon: ICONS.reportes,   roles: ['edil', 'administrador'] },
-      { path: '/ayuda',     label: 'Ayuda',             icon: ICONS.ayuda,      roles: ['auxiliar', 'administrador', 'edil'] },
+      { path: '/inicio',    label: 'Inicio',            icon: 'inicio',   roles: ['auxiliar', 'administrador', 'edil'] },
+      { path: '/generador', label: 'Crear documento',   icon: 'crear',    roles: ['auxiliar', 'administrador', 'edil'] },
+      { path: '/edil',      label: 'Buscar documentos', icon: 'buscar',   roles: ['edil', 'administrador'] },
+      { path: '/reportes',  label: 'Reportes',          icon: 'reportes', roles: ['edil', 'administrador'] },
+      { path: '/ayuda',     label: 'Ayuda',             icon: 'ayuda',    roles: ['auxiliar', 'administrador', 'edil'] },
     ],
   },
   {
     label: 'Administración',
     items: [
-      { path: '/admin',                 label: 'Resumen',          icon: ICONS.resumen,    roles: ['administrador', 'edil'] },
-      { path: '/admin/usuarios',        label: 'Usuarios',         icon: ICONS.usuarios, roles: ['administrador'] },
-      { path: '/admin/tipos-documento', label: 'Tipos de documento', icon: ICONS.tipos,  roles: ['administrador'] },
-      { path: '/admin/auditoria',       label: 'Auditoría',        icon: ICONS.auditoria,roles: ['administrador', 'edil'] },
-      { path: '/admin/jal-config',      label: 'Configuración JAL', icon: ICONS.config,  roles: ['administrador'] },
-      { path: '/admin/configuracion/backup', label: 'Copias de seguridad', icon: ICONS.backup,  roles: ['administrador'] },
+      { path: '/admin',                      label: 'Resumen',             icon: 'resumen',   roles: ['administrador', 'edil'] },
+      { path: '/admin/usuarios',             label: 'Usuarios',            icon: 'usuarios',  roles: ['administrador'] },
+      { path: '/admin/tipos-documento',      label: 'Tipos de documento',  icon: 'tipos',     roles: ['administrador'] },
+      { path: '/admin/auditoria',            label: 'Auditoría',           icon: 'auditoria', roles: ['administrador', 'edil'] },
+      { path: '/admin/jal-config',           label: 'Configuración JAL',   icon: 'config',    roles: ['administrador'] },
+      { path: '/admin/configuracion/backup', label: 'Copias de seguridad', icon: 'copia',     roles: ['administrador'] },
     ],
   },
 ];
 
-// Lista plana para el drawer móvil
-const NAV_FLAT = NAV_GROUPS.flatMap(g => g.items);
+function isActivePath(pathname, path) {
+  return pathname === path || (path !== '/admin' && pathname.startsWith(`${path}/`));
+}
 
-// ── NavItem ───────────────────────────────────────────────
-function NavItem({ item, active, onClick, collapsed }) {
+// ── Elemento del lomo ──────────────────────────────────────
+// El activo es una pestaña de carpeta: toma el color del papel y se une al contenido.
+function NavItem({ item, active, collapsed, onClick }) {
   return (
     <Link
       to={item.path}
       onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      aria-label={collapsed ? item.label : undefined}
       title={collapsed ? item.label : undefined}
-      className={`flex items-center py-2.5 min-h-[44px] rounded-lg text-base transition-all ${
-        collapsed ? 'justify-center px-2' : 'gap-3 px-3'
-      } ${
-        active
-          ? 'bg-white/15 text-white font-medium'
-          : 'text-jal-blue-100 hover:bg-white/10 hover:text-white'
-      }`}
+      className={`group flex min-h-[46px] items-center gap-3 text-base
+        focus-visible:outline-bg focus-visible:-outline-offset-4
+        ${collapsed ? 'justify-center rounded-tab mx-2 px-2' : 'rounded-l-tab pl-4 pr-3 ml-3'}
+        ${active
+          ? `bg-bg text-brand font-semibold ${collapsed ? '' : 'mr-0'}`
+          : `text-white/85 hover:bg-white/10 hover:text-white ${collapsed ? '' : 'mr-3 rounded-r-tab'}`}`}
+      style={{ transition: 'background-color var(--dur-fast) ease, color var(--dur-fast) ease' }}
     >
-      <Icon d={item.icon} />
+      <Icon name={item.icon} />
       {!collapsed && <span className="truncate">{item.label}</span>}
-      {!collapsed && active && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white flex-shrink-0" />}
     </Link>
   );
 }
-
-// ── Mobile drawer ─────────────────────────────────────────
-function MobileDrawer({ user, isOnline, visibleGroups, isActive, onClose, onNavigate, onChangePassword, onLogout }) {
-  const drawerRef = useRef(null);
-  useFocusTrap(drawerRef, { onEscape: onClose });
-
-  return (
-    <div className="fixed inset-0 z-50 md:hidden flex">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div
-        ref={drawerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Menú de navegación"
-        className="relative w-72 max-w-[85vw] bg-jal-blue-600 flex flex-col h-full shadow-2xl"
-      >
-        {/* Cabecera */}
-        <div className="px-4 py-5 flex items-start justify-between border-b border-white/10">
-          <div>
-            <p className="text-white font-semibold">{user?.name}</p>
-            <p className="text-jal-blue-200 text-xs mt-0.5">{ROLE_LABEL[user?.role] || user?.role}</p>
-            <div className="flex items-center gap-1.5 mt-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-400' : 'bg-amber-400'}`} />
-              <span className="text-jal-blue-200 text-xs">{isOnline ? 'En línea' : 'Sin conexión'}</span>
-            </div>
-          </div>
-          <button onClick={onClose} aria-label="Cerrar menú" className="text-white/70 hover:text-white text-2xl leading-none mt-0.5">×</button>
-        </div>
-
-        {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-4">
-          {visibleGroups.map(group => (
-            <div key={group.label}>
-              <p className="text-jal-blue-300 text-xs font-semibold uppercase tracking-widest px-3 mb-1.5">
-                {group.label}
-              </p>
-              <div className="space-y-0.5">
-                {group.items.map(item => (
-                  <NavItem key={item.path} item={item} active={isActive(item)} onClick={onClose} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* Acciones */}
-        <div className="border-t border-white/10 p-3 space-y-0.5">
-          <button onClick={() => { onNavigate('/perfil'); onClose(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-jal-blue-100 hover:bg-white/10 rounded-lg">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            Mi perfil y firma
-          </button>
-          <button onClick={() => { onChangePassword(); onClose(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-jal-blue-100 hover:bg-white/10 rounded-lg">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            Cambiar contraseña
-          </button>
-          <button onClick={() => { onLogout(); onClose(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-red-300 hover:bg-white/10 rounded-lg font-medium">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Cerrar sesión
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-Icon.propTypes = { d: PropTypes.string.isRequired, d2: PropTypes.string };
 
 const navItemShape = PropTypes.shape({
   path: PropTypes.string.isRequired,
@@ -169,295 +80,302 @@ const navItemShape = PropTypes.shape({
 NavItem.propTypes = {
   item: navItemShape.isRequired,
   active: PropTypes.bool.isRequired,
-  onClick: PropTypes.func,
   collapsed: PropTypes.bool,
+  onClick: PropTypes.func,
 };
 
-const userShape = PropTypes.shape({ name: PropTypes.string, role: PropTypes.string });
-MobileDrawer.propTypes = {
-  user: userShape,
-  isOnline: PropTypes.bool.isRequired,
-  visibleGroups: PropTypes.array.isRequired,
-  isActive: PropTypes.func.isRequired,
-  onClose: PropTypes.func.isRequired,
-  onNavigate: PropTypes.func.isRequired,
-  onChangePassword: PropTypes.func.isRequired,
+function NavGroups({ groups, pathname, collapsed, onNavigate }) {
+  return (
+    <nav aria-label="Navegación principal" className="flex-1 overflow-y-auto py-2 space-y-5">
+      {groups.map((group) => (
+        <div key={group.label}>
+          {collapsed
+            ? <div className="mx-4 mb-2 border-t border-white/15" />
+            : <p className="px-7 pb-1.5 text-eyebrow uppercase text-white/65">{group.label}</p>}
+          <ul className="space-y-1">
+            {group.items.map((item) => (
+              <li key={item.path}>
+                <NavItem item={item} active={isActivePath(pathname, item.path)} collapsed={collapsed} onClick={onNavigate} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+}
+NavGroups.propTypes = {
+  groups: PropTypes.array.isRequired,
+  pathname: PropTypes.string.isRequired,
+  collapsed: PropTypes.bool,
+  onNavigate: PropTypes.func,
+};
+
+function Wordmark({ compact }) {
+  return (
+    <Link to="/inicio" className="block rounded-md px-1 text-white">
+      <span className={`block font-serif font-semibold leading-tight ${compact ? 'text-lg' : 'text-xl'}`}>Gestor documental</span>
+      {!compact && <span className="block text-[0.875rem] text-white/80">{JAL_NAME}</span>}
+    </Link>
+  );
+}
+Wordmark.propTypes = { compact: PropTypes.bool };
+
+// ── Menú de la cuenta (escritorio) ─────────────────────────
+function AccountMenu({ user, collapsed, onProfile, onPassword, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const item = 'flex w-full items-center gap-3 px-4 py-3 text-left text-ink hover:bg-gray-50';
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-label={collapsed ? `Cuenta de ${user?.name}` : undefined}
+        className={`flex w-full items-center gap-3 rounded-md py-2 text-left text-white hover:bg-white/10 ${collapsed ? 'justify-center px-2' : 'px-3'}`}
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/15 font-semibold">
+          {user?.name?.charAt(0)?.toUpperCase() || '?'}
+        </span>
+        {!collapsed && (
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold leading-tight">{user?.name}</span>
+            <span className="block text-[0.875rem] text-white/80">{ROLE_LABEL[user?.role] || user?.role} · Mi cuenta</span>
+          </span>
+        )}
+      </button>
+      {open && (
+        <div role="menu" className="anim-pop absolute bottom-full left-0 z-50 mb-2 w-64 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-float">
+          <button role="menuitem" type="button" className={item} onClick={() => { setOpen(false); onProfile(); }}>
+            <Icon name="firma" className="text-ink-muted" /> Mi perfil y firma
+          </button>
+          <button role="menuitem" type="button" className={item} onClick={() => { setOpen(false); onPassword(); }}>
+            <Icon name="llave" className="text-ink-muted" /> Cambiar contraseña
+          </button>
+          <div className="my-1 border-t border-line" />
+          <button role="menuitem" type="button" className={`${item} text-danger-fg hover:bg-danger-bg`} onClick={() => { setOpen(false); onLogout(); }}>
+            <Icon name="salir" /> Cerrar sesión
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+AccountMenu.propTypes = {
+  user: PropTypes.shape({ name: PropTypes.string, role: PropTypes.string }),
+  collapsed: PropTypes.bool,
+  onProfile: PropTypes.func.isRequired,
+  onPassword: PropTypes.func.isRequired,
   onLogout: PropTypes.func.isRequired,
 };
 
+// ── Menú completo en pantallas pequeñas ─────────────────────
+function MobileDrawer({ user, groups, pathname, onClose, onProfile, onPassword, onLogout }) {
+  const ref = useRef(null);
+  useFocusTrap(ref, { onEscape: onClose });
+  const row = 'flex w-full min-h-[46px] items-center gap-3 rounded-md px-4 text-left text-white/90 hover:bg-white/10';
+
+  return (
+    <div className="fixed inset-0 z-50 flex lg:hidden">
+      <div className="anim-backdrop absolute inset-0 bg-brand-900/50" onClick={onClose} aria-hidden="true" />
+      <div
+        ref={ref}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menú"
+        className="anim-drawer relative flex h-full w-80 max-w-[86vw] flex-col overflow-y-auto bg-brand pt-5 shadow-float [&>nav]:shrink-0 [&>nav]:overflow-visible"
+      >
+        <div className="flex items-start justify-between gap-3 px-5 pb-5">
+          <Wordmark />
+          <button type="button" onClick={onClose} aria-label="Cerrar menú" className="grid h-11 w-11 place-items-center rounded-md text-white hover:bg-white/10">
+            <Icon name="cerrar" />
+          </button>
+        </div>
+        <NavGroups groups={groups} pathname={pathname} onNavigate={onClose} />
+        <div className="border-t border-white/15 p-3">
+          <p className="px-4 pb-2 text-white">
+            <span className="block font-semibold">{user?.name}</span>
+            <span className="text-[0.875rem] text-white/80">{ROLE_LABEL[user?.role] || user?.role}</span>
+          </p>
+          <button type="button" className={row} onClick={() => { onClose(); onProfile(); }}><Icon name="firma" /> Mi perfil y firma</button>
+          <button type="button" className={row} onClick={() => { onClose(); onPassword(); }}><Icon name="llave" /> Cambiar contraseña</button>
+          <button type="button" className={row} onClick={() => { onClose(); onLogout(); }}><Icon name="salir" /> Cerrar sesión</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+MobileDrawer.propTypes = {
+  user: PropTypes.shape({ name: PropTypes.string, role: PropTypes.string }),
+  groups: PropTypes.array.isRequired,
+  pathname: PropTypes.string.isRequired,
+  onClose: PropTypes.func.isRequired,
+  onProfile: PropTypes.func.isRequired,
+  onPassword: PropTypes.func.isRequired,
+  onLogout: PropTypes.func.isRequired,
+};
+
+// ── Barra inferior en móvil y tablet: las tareas frecuentes a un toque ──
+function BottomNav({ pathname, canSearch, onMenu }) {
+  const items = [
+    { path: '/inicio', label: 'Inicio', icon: 'inicio' },
+    { path: '/generador', label: 'Crear', icon: 'crear' },
+    canSearch ? { path: '/edil', label: 'Buscar', icon: 'buscar' } : { path: '/ayuda', label: 'Ayuda', icon: 'ayuda' },
+  ];
+  const cls = (active) => `relative flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 text-[0.8125rem]
+    ${active ? 'font-semibold text-brand' : 'text-ink-muted'}`;
+  return (
+    <nav aria-label="Accesos rápidos" className="fixed inset-x-0 bottom-0 z-30 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden">
+      {items.map((it) => {
+        const active = isActivePath(pathname, it.path);
+        return (
+          <Link key={it.path} to={it.path} aria-current={active ? 'page' : undefined} className={cls(active)}>
+            {active && <span aria-hidden="true" className="absolute top-0 h-[3px] w-8 rounded-b-sm bg-accent" />}
+            <Icon name={it.icon} size={22} />
+            {it.label}
+          </Link>
+        );
+      })}
+      <button type="button" onClick={onMenu} className={cls(false)} aria-haspopup="dialog">
+        <Icon name="menu" size={22} />
+        Menú
+      </button>
+    </nav>
+  );
+}
+BottomNav.propTypes = {
+  pathname: PropTypes.string.isRequired,
+  canSearch: PropTypes.bool,
+  onMenu: PropTypes.func.isRequired,
+};
+
 // ── Componente principal ──────────────────────────────────
-export default function AppLayout({ children, title }) {
+/**
+ * Marco de todas las pantallas internas.
+ * - `title`: nombre corto del módulo (pestaña del navegador y h1 si no hay `heading`).
+ * - `heading`, `eyebrow`, `description`, `actions`: encabezado de la página.
+ * - `header={false}` cuando la página dibuja su propio encabezado.
+ */
+export default function AppLayout({ children, title, heading, eyebrow, description, actions, header = true, width = 'page' }) {
   const { user, logout, hasRole } = useAuthStore();
-  const { isOnline, pendingCount, isSyncing } = useSyncStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showUserMenu, setShowUserMenu]   = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('sidebar') !== 'closed');
-
-  function toggleSidebar() {
-    setSidebarOpen(v => {
-      const next = !v;
-      localStorage.setItem('sidebar', next ? 'open' : 'closed');
-      return next;
-    });
-  }
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    try { return localStorage.getItem('sidebar') !== 'closed'; } catch { return true; }
+  });
 
   useSyncManager();
 
-  function isActive(item) {
-    return location.pathname === item.path ||
-      (item.path !== '/admin' && location.pathname.startsWith(item.path));
+  useEffect(() => {
+    if (title) document.title = `${title} · Gestor JAL`;
+  }, [title]);
+
+  function toggleSidebar() {
+    setSidebarOpen((v) => {
+      try { localStorage.setItem('sidebar', v ? 'closed' : 'open'); } catch { /* sin almacenamiento */ }
+      return !v;
+    });
   }
 
-  function closeMobile() { setShowMobileMenu(false); }
+  const groups = NAV_GROUPS
+    .map((g) => ({ ...g, items: g.items.filter((i) => hasRole(...i.roles)) }))
+    .filter((g) => g.items.length > 0);
 
-  const visibleGroups = NAV_GROUPS.map(g => ({
-    ...g,
-    items: g.items.filter(i => hasRole(...i.roles)),
-  })).filter(g => g.items.length > 0);
-
-  const visibleFlat = NAV_FLAT.filter(i => hasRole(...i.roles));
+  const goProfile = () => navigate('/perfil');
+  const openPassword = () => setShowChangePassword(true);
+  const maxW = width === 'narrow' ? 'max-w-3xl' : width === 'wide' ? 'max-w-none' : 'max-w-page';
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-bg">
+      <a href="#contenido" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-md focus:bg-surface focus:px-4 focus:py-3 focus:font-semibold focus:text-brand focus:shadow-float">
+        Saltar al contenido
+      </a>
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
-      <SyncProgressBanner />
 
-      {/* ══════════════════════════════════════════════════════
-          SIDEBAR DESKTOP (md+)
-      ══════════════════════════════════════════════════════ */}
-      <aside className={`hidden md:flex fixed left-0 top-0 h-full bg-jal-blue-600 flex-col z-30 shadow-xl transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-14'}`}>
-
-        {/* Logo */}
-        <div className={`py-5 flex items-center border-b border-white/10 ${sidebarOpen ? 'px-4 gap-3' : 'px-2 justify-center'}`}>
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-            <span className="text-white text-xs font-bold select-none">
-              {(import.meta.env.VITE_JAL_SHORT || 'JAL').slice(0, 3)}
-            </span>
-          </div>
-          {sidebarOpen && (
-            <div className="min-w-0">
-              <p className="text-white font-semibold text-sm leading-tight truncate">
-                {import.meta.env.VITE_JAL_NOMBRE || 'Gestor JAL'}
-              </p>
-              <p className="text-jal-blue-200 text-xs">Junta Administradora Local</p>
-            </div>
-          )}
+      {/* Lomo verde (escritorio) */}
+      <aside className={`fixed inset-y-0 left-0 z-30 hidden flex-col bg-brand pt-6 pb-4 lg:flex ${sidebarOpen ? 'w-64' : 'w-[4.5rem]'}`}>
+        <div className={`mb-6 flex items-start gap-2 ${sidebarOpen ? 'px-6' : 'px-2 justify-center'}`}>
+          {sidebarOpen && <div className="min-w-0 flex-1"><Wordmark /></div>}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-md text-white/80 hover:bg-white/10 hover:text-white"
+            aria-label={sidebarOpen ? 'Contraer menú lateral' : 'Expandir menú lateral'}
+            aria-expanded={sidebarOpen}
+            title={sidebarOpen ? 'Contraer menú' : 'Expandir menú'}
+          >
+            <Icon name="colapsar" />
+          </button>
         </div>
-
-        {/* Navegación agrupada */}
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-5">
-          {visibleGroups.map(group => (
-            <div key={group.label}>
-              {sidebarOpen && (
-                <p className="text-jal-blue-300 text-xs font-semibold uppercase tracking-widest px-3 mb-1.5">
-                  {group.label}
-                </p>
-              )}
-              {!sidebarOpen && <div className="border-t border-white/10 mb-1.5" />}
-              <div className="space-y-0.5">
-                {group.items.map(item => (
-                  <NavItem key={item.path} item={item} active={isActive(item)} collapsed={!sidebarOpen} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* Footer de usuario */}
-        <div className="border-t border-white/10 p-2">
-          {/* Estado online — solo visible cuando está abierto */}
-          {sidebarOpen && (
-            <div className="flex items-center gap-2 px-3 py-1.5 mb-2">
-              {isSyncing ? (
-                <svg className="animate-spin h-3 w-3 text-jal-blue-300" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-              ) : (
-                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isOnline ? 'bg-green-400' : 'bg-amber-400'}`} />
-              )}
-              <span className="text-jal-blue-100 text-sm">
-                {isSyncing ? 'Sincronizando…' : isOnline ? 'En línea' : 'Sin conexión'}
-              </span>
-              {pendingCount > 0 && !isSyncing && (
-                <span className="ml-auto bg-amber-400 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full">
-                  {pendingCount}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Datos de usuario + menú */}
-          <div className="relative">
-            <button
-              onClick={() => setShowUserMenu(v => !v)}
-              title={!sidebarOpen ? user?.name : undefined}
-              aria-label="Menú de usuario"
-              aria-expanded={showUserMenu}
-              aria-haspopup="true"
-              className={`w-full flex items-center py-2 rounded-lg hover:bg-white/10 transition-colors text-left ${sidebarOpen ? 'gap-2.5 px-3' : 'justify-center px-2'}`}
-            >
-              <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 relative">
-                <span className="text-white text-xs font-semibold">
-                  {user?.name?.charAt(0)?.toUpperCase() || '?'}
-                </span>
-                {!sidebarOpen && (
-                  <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-jal-blue-600 ${isOnline ? 'bg-green-400' : 'bg-amber-400'}`} />
-                )}
-              </div>
-              {sidebarOpen && (
-                <>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-white text-sm font-medium leading-tight truncate">{user?.name}</p>
-                    <p className="text-jal-blue-300 text-xs leading-tight">{ROLE_LABEL[user?.role] || user?.role}</p>
-                  </div>
-                  <svg className="w-3.5 h-3.5 text-jal-blue-300 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </>
-              )}
-            </button>
-
-            {showUserMenu && (
-              <div className={`absolute bottom-full mb-1 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 ${sidebarOpen ? 'left-0 right-0' : 'left-0 w-44'}`}>
-                <button
-                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                  onClick={() => { navigate('/perfil'); setShowUserMenu(false); }}
-                >
-                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                  Mi perfil y firma
-                </button>
-                <button
-                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                  onClick={() => { setShowChangePassword(true); setShowUserMenu(false); }}
-                >
-                  <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                  Cambiar contraseña
-                </button>
-                <hr className="my-1 border-gray-100" />
-                <button
-                  className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                  onClick={() => { logout(); setShowUserMenu(false); }}
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                  Cerrar sesión
-                </button>
-              </div>
-            )}
-          </div>
+        <NavGroups groups={groups} pathname={location.pathname} collapsed={!sidebarOpen} />
+        <div className={`mt-2 space-y-2 border-t border-white/15 pt-3 ${sidebarOpen ? 'px-3' : 'px-1'}`}>
+          <AccountMenu user={user} collapsed={!sidebarOpen} onProfile={goProfile} onPassword={openPassword} onLogout={logout} />
         </div>
       </aside>
 
-      {/* ══════════════════════════════════════════════════════
-          ÁREA DE CONTENIDO (con margen para el sidebar en md+)
-      ══════════════════════════════════════════════════════ */}
-      <div className={`flex flex-col min-h-screen transition-all duration-300 ${sidebarOpen ? 'md:ml-64' : 'md:ml-14'}`}>
-
-        {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
-          <div className="px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
-
-            {/* Izquierda: hamburger (móvil) + toggle sidebar (desktop) + título */}
-            <div className="flex items-center gap-3 min-w-0">
-              {/* Hamburger — solo móvil */}
-              <button
-                onClick={() => setShowMobileMenu(true)}
-                className="md:hidden p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-600 flex-shrink-0"
-                aria-label="Abrir menú"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-
-              {/* Toggle sidebar — solo desktop */}
-              <button
-                onClick={toggleSidebar}
-                className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-500 flex-shrink-0"
-                aria-label={sidebarOpen ? 'Colapsar menú lateral' : 'Expandir menú lateral'}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                  {sidebarOpen
-                    ? <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                    : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-                  }
-                </svg>
-              </button>
-
-              {/* Nombre de la app en móvil */}
-              <span className="md:hidden font-semibold text-jal-blue-600 text-sm truncate">
-                {import.meta.env.VITE_JAL_SHORT || 'JAL'}
-              </span>
-
-              {/* Título de la página en desktop */}
-              {title && (
-                <h1 className="hidden md:block text-base font-semibold text-gray-800 truncate">{title}</h1>
-              )}
-            </div>
-
-            {/* Derecha: notificaciones + info usuario desktop */}
-            <div className="flex items-center gap-3 flex-shrink-0">
+      <div className={`flex min-h-screen flex-col ${sidebarOpen ? 'lg:pl-64' : 'lg:pl-[4.5rem]'}`}>
+        {/* Barra superior: estado de conexión y avisos; en móvil, también la marca */}
+        <header className="sticky top-0 z-20 border-b border-line bg-bg/95 backdrop-blur-sm lg:bg-bg">
+          <div className="flex h-16 items-center gap-3 px-4 sm:px-6 lg:px-10">
+            <Link to="/inicio" className="font-serif text-lg font-semibold text-brand lg:hidden">Gestor documental</Link>
+            <div className="ml-auto flex items-center gap-2 sm:gap-3">
+              <ConnectionStatus />
               <NotificationBell />
-
-              {/* Nombre usuario solo desktop (ya está en sidebar) */}
-              <div className="hidden md:flex items-center gap-2 pl-3 border-l border-gray-200">
-                <div className="w-7 h-7 rounded-full bg-jal-blue-100 flex items-center justify-center">
-                  <span className="text-jal-blue-600 text-xs font-semibold">
-                    {user?.name?.charAt(0)?.toUpperCase() || '?'}
-                  </span>
-                </div>
-                <span className="text-xs text-gray-600 font-medium max-w-[120px] truncate">{user?.name}</span>
-              </div>
             </div>
           </div>
+          <ServerStatusBanner />
+          <SyncProgressBanner />
         </header>
 
-        {/* Título en móvil (bajo el top bar) */}
-        {title && (
-          <div className="md:hidden px-4 pt-4 pb-1">
-            <h1 className="text-lg font-bold text-jal-blue-600">{title}</h1>
+        <main id="contenido" tabIndex={-1} className="min-w-0 flex-1 px-4 pt-6 pb-28 sm:px-6 lg:px-10 lg:pt-10 lg:pb-28 focus:outline-none">
+          <div className={`mx-auto w-full ${maxW}`}>
+            {header && (heading || title) && (
+              <PageHeader eyebrow={eyebrow} title={heading || title} description={description} actions={actions} />
+            )}
+            {children}
           </div>
-        )}
-
-        {/* Contenido principal */}
-        <main className="flex-1 px-4 sm:px-6 py-4 sm:py-6">
-          {title && (
-            <h1 className="hidden md:block text-xl font-bold text-jal-blue-500 mb-6 sr-only">{title}</h1>
-          )}
-          {children}
         </main>
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          DRAWER MÓVIL
-      ══════════════════════════════════════════════════════ */}
       <ChatWidget />
+      <BottomNav pathname={location.pathname} canSearch={hasRole('edil', 'administrador')} onMenu={() => setShowMobileMenu(true)} />
 
       {showMobileMenu && (
         <MobileDrawer
           user={user}
-          isOnline={isOnline}
-          visibleGroups={visibleGroups}
-          isActive={isActive}
-          onClose={closeMobile}
-          onNavigate={navigate}
-          onChangePassword={() => setShowChangePassword(true)}
+          groups={groups}
+          pathname={location.pathname}
+          onClose={() => setShowMobileMenu(false)}
+          onProfile={goProfile}
+          onPassword={openPassword}
           onLogout={logout}
         />
       )}
     </div>
   );
 }
+
 AppLayout.propTypes = {
   children: PropTypes.node.isRequired,
   title: PropTypes.string,
+  heading: PropTypes.node,
+  eyebrow: PropTypes.node,
+  description: PropTypes.node,
+  actions: PropTypes.node,
+  header: PropTypes.bool,
+  width: PropTypes.oneOf(['narrow', 'page', 'wide']),
 };

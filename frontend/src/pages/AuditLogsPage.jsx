@@ -7,6 +7,8 @@ import { useUsers } from '../hooks/useUsers';
 import { formatDateTime } from '../utils/format';
 import { SkeletonTable } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
+import Notice from '../components/ui/Notice';
+import Icon from '../components/ui/Icon';
 
 const ACTION_LABELS = {
   // Sesión
@@ -76,7 +78,7 @@ const RESULTS = [
 const RESULT_CLASS = {
   success: 'badge-synced',
   failure: 'badge-conflict',
-  error:   'bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full text-xs font-medium',
+  error:   'badge-pending',
 };
 
 const EMPTY_FILTERS = { user_id: '', action: '', result: '', date_from: '', date_to: '' };
@@ -84,23 +86,15 @@ const EMPTY_FILTERS = { user_id: '', action: '', result: '', date_from: '', date
 function Pagination({ page, pages, onChange }) {
   if (pages <= 1) return null;
   return (
-    <div className="flex items-center justify-center gap-2 mt-4">
-      <button
-        className="btn-secondary text-xs px-3 py-1.5"
-        onClick={() => onChange(page - 1)}
-        disabled={page === 1}
-      >
-        ← Anterior
+    <nav aria-label="Páginas" className="mt-6 flex flex-wrap items-center justify-center gap-3">
+      <button type="button" className="btn-secondary btn-sm" onClick={() => onChange(page - 1)} disabled={page === 1}>
+        <Icon name="atras" size={18} />Anterior
       </button>
-      <span className="text-xs text-gray-500">Página {page} de {pages}</span>
-      <button
-        className="btn-secondary text-xs px-3 py-1.5"
-        onClick={() => onChange(page + 1)}
-        disabled={page === pages}
-      >
-        Siguiente →
+      <span className="text-ink-muted" aria-current="page">Página {page} de {pages}</span>
+      <button type="button" className="btn-secondary btn-sm" onClick={() => onChange(page + 1)} disabled={page === pages}>
+        Siguiente<Icon name="flecha" size={18} />
       </button>
-    </div>
+    </nav>
   );
 }
 Pagination.propTypes = {
@@ -146,64 +140,73 @@ export default function AuditLogsPage() {
   function setField(k, v) { setFilters(f => ({ ...f, [k]: v })); }
 
   return (
-    <AppLayout title="Registros de Auditoría">
-      {/* Filtros */}
-      <form onSubmit={handleSearch} className="card p-4 mb-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+    <AppLayout
+      title="Auditoría"
+      eyebrow="Administración"
+      description="Registro de quién hizo qué y cuándo. No se puede modificar ni borrar desde aquí."
+      width="wide"
+    >
+      <form onSubmit={handleSearch} className="card mb-6 p-5" aria-label="Filtros de auditoría">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <div>
-            <label className="label">Usuario</label>
-            <select className="input text-xs" value={filters.user_id} onChange={e => setField('user_id', e.target.value)}>
+            <label className="label" htmlFor="a-user_id">Usuario</label>
+            <select id="a-user_id" className="input" value={filters.user_id} onChange={e => setField('user_id', e.target.value)}>
               <option value="">Todos</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Acción</label>
-            <select className="input text-xs" value={filters.action} onChange={e => setField('action', e.target.value)}>
+            <label className="label" htmlFor="a-action">Acción</label>
+            <select id="a-action" className="input" value={filters.action} onChange={e => setField('action', e.target.value)}>
               {ACTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Resultado</label>
-            <select className="input text-xs" value={filters.result} onChange={e => setField('result', e.target.value)}>
+            <label className="label" htmlFor="a-result">Resultado</label>
+            <select id="a-result" className="input" value={filters.result} onChange={e => setField('result', e.target.value)}>
               {RESULTS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </div>
           <div>
-            <label className="label">Desde</label>
-            <input type="date" className="input text-xs" value={filters.date_from} onChange={e => setField('date_from', e.target.value)} />
+            <label className="label" htmlFor="a-date_from">Desde</label>
+            <input type="date" id="a-date_from" className="input" value={filters.date_from} onChange={e => setField('date_from', e.target.value)} />
           </div>
           <div>
-            <label className="label">Hasta</label>
-            <input type="date" className="input text-xs" value={filters.date_to} onChange={e => setField('date_to', e.target.value)} />
+            <label className="label" htmlFor="a-date_to">Hasta</label>
+            <input type="date" id="a-date_to" className="input" value={filters.date_to} onChange={e => setField('date_to', e.target.value)} />
           </div>
         </div>
-        <div className="flex gap-2 mt-3">
-          <button type="submit" className="btn-primary text-xs">Buscar</button>
-          <button type="button" className="btn-secondary text-xs" onClick={handleReset}>Limpiar</button>
-          <span className="ml-auto text-xs text-gray-400 self-center">
-            {data.total} registro(s) encontrado(s)
-          </span>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button type="submit" className="btn-primary">Buscar</button>
+          <button type="button" className="btn-ghost" onClick={handleReset}>Quitar filtros</button>
+          <p className="text-ink-muted sm:ml-auto" role="status">
+            {loading ? 'Buscando…' : `${data.total} registro${data.total === 1 ? '' : 's'}`}
+          </p>
         </div>
       </form>
 
-      {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      {error && (
+        <Notice tone="danger" title="No se pudo cargar el registro" className="mb-4"
+          action={<button type="button" className="btn-secondary btn-sm" onClick={load}>Intentar de nuevo</button>}>
+          {error}
+        </Notice>
+      )}
 
       {/* Tabla */}
-      <div className="card p-0 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-jal-blue-500 text-white">
+      <div className="table-wrap">
+        <div className="relative overflow-x-auto" tabIndex={0} role="region" aria-label="Registros de auditoría">
+          <table className="table">
+            <thead>
               <tr>
-                <th className="px-4 py-3 text-left font-medium whitespace-nowrap">Fecha y hora</th>
-                <th className="px-4 py-3 text-left font-medium">Usuario</th>
-                <th className="px-4 py-3 text-left font-medium">Acción</th>
-                <th className="px-4 py-3 text-left font-medium hidden md:table-cell">Recurso</th>
-                <th className="px-4 py-3 text-left font-medium">Resultado</th>
-                <th className="px-4 py-3 text-left font-medium hidden lg:table-cell">IP</th>
+                <th scope="col">Fecha y hora</th>
+                <th scope="col">Usuario</th>
+                <th scope="col">Acción</th>
+                <th scope="col" className="hidden md:table-cell">Recurso</th>
+                <th scope="col">Resultado</th>
+                <th scope="col" className="hidden lg:table-cell">IP</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {loading && (
                 <tr><td colSpan={6} className="px-4 py-4"><SkeletonTable rows={5} cols={6} /></td></tr>
               )}
@@ -211,32 +214,32 @@ export default function AuditLogsPage() {
                 <tr><EmptyState message="No hay registros para los filtros seleccionados." colSpan={6} /></tr>
               )}
               {!loading && data.rows.map(row => (
-                <tr key={row.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">
+                <tr key={row.id}>
+                  <td className="text-ink-muted whitespace-nowrap">
                     {formatDateTime(row.timestamp)}
                   </td>
-                  <td className="px-4 py-2.5">
+                  <td>
                     {row.user ? (
                       <div>
-                        <p className="font-medium text-gray-800">{row.user.name}</p>
-                        <p className="text-gray-400">{row.user.email}</p>
+                        <p className="font-semibold text-ink">{row.user.name}</p>
+                        <p className="text-ink-muted">{row.user.email}</p>
                       </div>
                     ) : (
-                      <span className="text-gray-300 italic">Sistema</span>
+                      <span className="text-ink-muted">Sistema</span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className="text-gray-800" title={row.action}>{actionLabel(row.action)}</span>
+                  <td>
+                    <span className="text-ink" title={row.action}>{actionLabel(row.action)}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-gray-500 hidden md:table-cell max-w-[200px] truncate">
+                  <td className="text-ink-muted hidden md:table-cell max-w-[200px] truncate">
                     {row.resource || '—'}
                   </td>
-                  <td className="px-4 py-2.5">
-                    <span className={RESULT_CLASS[row.result] || 'text-gray-500'}>
+                  <td>
+                    <span className={RESULT_CLASS[row.result] || 'text-ink-muted'}>
                       {row.result === 'success' ? 'Exitoso' : row.result === 'failure' ? 'Fallido' : 'Error'}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-gray-400 hidden lg:table-cell font-mono">
+                  <td className="text-ink-muted hidden lg:table-cell font-mono">
                     {row.ip || '—'}
                   </td>
                 </tr>

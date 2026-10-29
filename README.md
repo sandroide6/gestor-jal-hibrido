@@ -22,11 +22,18 @@ Genera documentos oficiales DOCX y PDF, funciona offline y permite acceso remoto
 
 ---
 
+## Diseño
+
+Sistema visual «El archivo vivo de la comunidad» (paleta, tipografía, componentes, movimiento y accesibilidad) en [`docs/design/`](docs/design/):
+[auditoría](docs/design/00-auditoria-diseno.md) · [visión](docs/design/01-vision-y-principios.md) · [sistema](docs/design/02-sistema-de-diseno.md) · [componentes](docs/design/03-componentes-ui.md) · [navegación](docs/design/04-arquitectura-de-navegacion.md) · [flujos](docs/design/05-flujos-de-usuario.md) · [movimiento](docs/design/06-motion-y-animaciones.md) · [accesibilidad](docs/design/07-accesibilidad.md) · [responsive y offline](docs/design/08-responsive-y-offline.md) · [Figma](docs/design/09-figma-y-entrega.md) · [guía de implementación](docs/design/10-guia-de-implementacion.md) · [validación](docs/design/11-validacion-visual-y-funcional.md) · [cambios](docs/design/CHANGELOG.md)
+
+---
+
 ## Stack
 
 | Capa | Tecnología |
 |------|------------|
-| Frontend | React 18 + Vite + Tailwind CSS + PWA (offline) |
+| Frontend | React 18 + Vite + Tailwind CSS + PWA (offline); Public Sans y Source Serif 4 autoalojadas |
 | Backend | Node.js 20+ (probado con 22) + Express + Sequelize |
 | Base de datos | PostgreSQL: local en Windows o Supabase en el despliegue híbrido |
 | Gráficas | Recharts 3 |

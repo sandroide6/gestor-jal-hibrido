@@ -1,79 +1,191 @@
+@import '@fontsource-variable/public-sans/wght.css';
+@import '@fontsource-variable/source-serif-4/wght.css';
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   html {
-    font-family: 'Inter', system-ui, sans-serif;
+    /* 17 px de base: lectura prolongada cómoda sin tocar el zoom del navegador */
+    font-size: 106.25%;
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply bg-gray-50 text-gray-900;
+    @apply bg-bg text-ink;
+    line-height: 1.6;
   }
 
-  /* Scrollbar personalizado */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  h1, h2, h3 {
+    text-wrap: balance;
   }
-  ::-webkit-scrollbar-track {
-    @apply bg-gray-100;
+
+  /* Foco visible y consistente: anillo terracota de 3 px separado del control */
+  :focus-visible {
+    outline: 3px solid rgb(var(--color-focus));
+    outline-offset: 2px;
   }
-  ::-webkit-scrollbar-thumb {
-    @apply bg-jal-blue-300 rounded-full;
+
+  ::selection {
+    background: rgb(var(--color-accent) / 0.18);
   }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-line-strong rounded-full; }
 }
 
 @layer components {
-  .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 text-base font-semibold
-           bg-jal-blue-500 text-white rounded-lg shadow-sm
-           hover:bg-jal-blue-600 focus:outline-none focus:ring-2 focus:ring-jal-blue-400
-           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+  /* ── Botones ─────────────────────────────────────────────
+     Feedback al presionar: scale(0.97) en 140 ms (ver 06-motion). */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 min-h-[46px] px-5 py-2.5 rounded-md
+           text-base font-semibold leading-tight text-center select-none
+           border border-transparent
+           disabled:cursor-not-allowed disabled:opacity-50;
+    transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease,
+                color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out);
+  }
+  .btn:not(:disabled):active { transform: scale(0.97); }
+  .btn-primary   { @apply btn bg-brand text-white hover:bg-brand-hover; }
+  .btn-secondary { @apply btn bg-surface text-brand border-line-strong hover:bg-brand-tint hover:border-brand-300; }
+  .btn-danger    { @apply btn bg-danger text-white hover:bg-danger-fg; }
+  .btn-danger-outline { @apply btn bg-surface text-danger-fg border-danger-border hover:bg-danger-bg; }
+  .btn-ghost     { @apply btn bg-transparent text-brand hover:bg-brand-tint; }
+  .btn-sm        { @apply min-h-[40px] px-3.5 py-1.5 text-[0.9375rem]; }
+  .btn-block     { @apply w-full; }
+
+  /* Interruptor (role=switch): 44×24, la perilla se desliza con transform */
+  .switch {
+    @apply relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full p-1;
+    transition: background-color var(--dur-fast) ease;
+  }
+  .switch-thumb {
+    @apply block h-5 w-5 rounded-full bg-white shadow-sm;
+    transition: transform var(--dur-base) var(--ease-in-out);
   }
 
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 text-base font-semibold
-           bg-white text-jal-blue-500 border border-jal-blue-200 rounded-lg shadow-sm
-           hover:bg-jal-blue-50 focus:outline-none focus:ring-2 focus:ring-jal-blue-400
-           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-  }
+  .link { @apply font-semibold text-brand underline decoration-brand-300 underline-offset-4 hover:decoration-brand; }
 
-  .btn-danger {
-    @apply inline-flex items-center justify-center gap-2 min-h-[44px] px-5 py-2.5 text-base font-semibold
-           bg-red-600 text-white rounded-lg shadow-sm
-           hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400
-           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
-  }
-
+  /* ── Superficies ─────────────────────────────────────────
+     Sin sombras por defecto: las hojas se separan con línea, como fichas de archivo. */
   .card {
-    @apply bg-white rounded-xl border border-gray-200 shadow-card p-6;
+    @apply bg-surface rounded-lg border border-line p-6;
+  }
+  .sheet {
+    @apply bg-surface rounded-sm border border-line shadow-sheet;
   }
 
+  /* ── Formularios ─────────────────────────────────────── */
   .input {
-    @apply block w-full rounded-lg border border-gray-400 px-3 py-2.5 text-base min-h-[44px]
-           shadow-sm placeholder-gray-500
-           focus:border-jal-blue-400 focus:outline-none focus:ring-1 focus:ring-jal-blue-400
-           disabled:bg-gray-50 disabled:text-gray-500;
+    @apply block w-full rounded-md border border-line-control bg-surface px-3.5 py-2.5 text-base text-ink min-h-[48px]
+           placeholder:text-gray-400
+           focus:outline-none focus:border-brand focus:ring-2 focus:ring-brand/25
+           disabled:bg-sunken disabled:text-ink-muted disabled:border-line-strong;
+    transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
   }
-
+  .input[aria-invalid='true'] {
+    @apply border-danger ring-2 ring-danger/20;
+  }
   .label {
-    @apply block text-base font-semibold text-gray-800 mb-1;
+    @apply block text-base font-semibold text-ink mb-1;
+  }
+  .hint {
+    @apply block text-[0.9375rem] leading-snug text-ink-muted mb-1.5;
+  }
+  .field-error {
+    @apply mt-1.5 flex items-start gap-1.5 text-[0.9375rem] font-semibold text-danger-fg;
+  }
+  .fieldset-legend {
+    @apply font-serif text-xl font-semibold text-ink pb-2 mb-4 border-b border-line w-full;
   }
 
-  .badge-synced {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-sm font-medium
-           bg-green-100 text-green-700;
+  /* ── Tipografía de página ─────────────────────────────── */
+  .eyebrow {
+    @apply inline-flex items-center gap-2.5 text-eyebrow uppercase text-accent;
   }
+  .eyebrow::before {
+    content: '';
+    @apply block h-0.5 w-6 bg-accent;
+  }
+  .title-page    { @apply font-serif text-[1.75rem] leading-tight font-semibold text-ink sm:text-[2rem]; }
+  .title-section { @apply font-serif text-[1.375rem] leading-snug font-semibold text-ink sm:text-2xl; }
+  .title-card    { @apply font-serif text-lg leading-snug font-semibold text-ink sm:text-xl; }
 
-  .badge-pending {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-sm font-medium
-           bg-amber-100 text-amber-700;
+  /* ── Tablas ──────────────────────────────────────────── */
+  .table-wrap { @apply bg-surface rounded-lg border border-line relative overflow-hidden; }
+  .table { @apply w-full text-[0.9375rem]; }
+  .table thead th {
+    @apply bg-sunken text-left text-eyebrow uppercase text-ink-muted px-4 py-3 whitespace-nowrap;
   }
+  .table tbody td { @apply px-4 py-3.5 border-t border-line align-middle text-ink; }
+  .table tbody tr { transition: background-color var(--dur-fast) ease; }
+  .table tbody tr:hover { @apply bg-gray-50; }
 
-  .badge-conflict {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-sm font-medium
-           bg-red-100 text-red-700;
+  /* ── Insignias heredadas (constants/SYNC_CLASS) ─────── */
+  .badge { @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-sm font-semibold whitespace-nowrap; }
+  .badge::before { content: ''; @apply block h-1.5 w-1.5 rounded-full bg-current; }
+  .badge-synced   { @apply badge bg-success-bg text-success-fg border-success-border; }
+  .badge-pending  { @apply badge bg-warning-bg text-warning-fg border-warning-border; }
+  .badge-conflict { @apply badge bg-danger-bg text-danger-fg border-danger-border; }
+  .badge-info     { @apply badge bg-info-bg text-info-fg border-info-border; }
+  .badge-neutral  { @apply badge bg-sunken text-ink-muted border-line-strong; }
+}
+
+/* ── Movimiento ──────────────────────────────────────────
+   Solo transform y opacity. Las entradas usan @starting-style (sin JS): en un
+   navegador sin soporte el contenido aparece igual, sin animar.
+   Detalle de cada una en docs/design/06-motion-y-animaciones.md. */
+
+/* Diálogo: centrado, escala desde 0.96 */
+.anim-dialog { transition: opacity var(--dur-enter) var(--ease-out), transform var(--dur-enter) var(--ease-out); }
+.anim-backdrop { transition: opacity var(--dur-enter) var(--ease-out); }
+/* Menú lateral móvil: entra desde su borde */
+.anim-drawer { transition: transform var(--dur-drawer) var(--ease-drawer); }
+/* Avisos flotantes: suben desde abajo */
+.anim-toast { transition: opacity var(--dur-enter) var(--ease-out), transform var(--dur-enter) var(--ease-out); }
+/* Cambio de paso en un trámite: el contenido nuevo se asienta 6 px */
+.anim-step { transition: opacity var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-out); }
+/* Menú desplegable anclado a su botón (abre hacia arriba desde la esquina inferior) */
+.anim-pop { transform-origin: bottom left; transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+/* Sello del radicado al expedir: evento poco frecuente, se permite un detalle */
+.anim-stamp { transition: opacity 280ms var(--ease-out), transform 280ms var(--ease-out); }
+
+@starting-style {
+  .anim-dialog { opacity: 0; transform: scale(0.96); }
+  .anim-backdrop { opacity: 0; }
+  .anim-drawer { transform: translateX(-100%); }
+  .anim-toast { opacity: 0; transform: translateY(12px); }
+  .anim-step { opacity: 0; transform: translateY(6px); }
+  .anim-pop { opacity: 0; transform: scale(0.97); }
+  .anim-stamp { opacity: 0; transform: rotate(-2deg) scale(1.08); }
+}
+
+/* Ficha de documento: se eleva 2 px al pasar el puntero (solo con mouse) */
+.lift { transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) ease, background-color var(--dur-fast) ease; }
+.lift:active { transform: scale(0.98); }
+/* Chevrón de las guías de Ayuda: gira 90° al abrir (ease-in-out: se mueve en su sitio) */
+.help-chevron { transition: transform var(--dur-base) var(--ease-in-out); }
+
+/* Botón del asistente: confirma la pulsación; sin rebote ni escala al pasar el puntero */
+.chat-fab { transition: background-color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out); }
+.chat-fab:active { transform: scale(0.95); }
+
+@media (hover: hover) and (pointer: fine) {
+  .lift:hover { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Menos movimiento, no cero: se conservan los fundidos y se quitan los desplazamientos */
+  @starting-style {
+    .anim-dialog, .anim-toast, .anim-step, .anim-pop, .anim-stamp { transform: none; }
   }
+  .anim-drawer, .switch-thumb, .help-chevron { transition: none; }
+  .lift:hover, .lift:active, .chat-fab:active, .btn:not(:disabled):active { transform: none; }
+  .animate-pulse { animation: none; }
+  .animate-spin { animation-duration: 1.6s; }
 }
