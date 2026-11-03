@@ -31,6 +31,16 @@ services:
         sync: false
       - key: ENCRYPTION_KEY
         sync: false
+      # Par RSA (RS256): obligatorio en producción, validateEnv() no arranca sin él
+      - key: JWT_PRIVATE_KEY
+        sync: false
+      - key: JWT_PUBLIC_KEY
+        sync: false
+      # Opcionales (ver deploy/render/.env.example)
+      - key: TRUST_PROXY_HOPS
+        sync: false
+      - key: METRICS_TOKEN
+        sync: false
 
       # ── CORS — dominio del frontend en Vercel ──────────────────────
       - key: ALLOWED_ORIGINS

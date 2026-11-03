@@ -1,0 +1,7 @@
+# Backend: npm run lint
+
+exit 0
+
+# Frontend: npm run lint
+✖ 10 problems (0 errors, 10 warnings)
+exit 0

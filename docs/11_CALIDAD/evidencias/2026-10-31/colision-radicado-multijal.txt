@@ -1,0 +1,18 @@
+# Prueba de colisión de radicados entre dos JAL de la misma base — 2026-10-31
+# Backend local en NODE_ENV=production sobre la base de la prueba de humo (datos ficticios).
+# La JAL 2 recibió por SQL una copia del tipo Certificado de Residencia de la JAL 1. Script: colision-radicado-multijal.cjs
+
+Login administrador JAL 2: 200
+Firma JAL 2: 200
+Código de dependencia JAL 2: "" (vacío = "JAL" por defecto)
+1) JAL 2 genera su primer documento con el código por defecto: 500 {"error":true,"code":"INTERNAL","message":"Error interno del servidor","requestId":"f5cd2f32-df3e-4749-a512-ef359a4fcfe8"}
+2) JAL 2 configura código de dependencia propio: 200
+3) JAL 2 genera el documento de nuevo: 201 radicado = 2026-PRUEBA2-SAL-000001
+
+# Registro del servidor para el paso 1 (extracto):
+{"level":"error","timestamp":"2026-10-31T08:24:10.891Z","message":"Validation error","requestId":"f5cd2f32-df3e-4749-a512-ef359a4fcfe8","status":500,"method":"POST","url":"/v1/documents","stack":"Erro
+
+# Conclusión: con el código de dependencia vacío, las dos JAL generan el mismo número 2026-JAL-SAL-000001;
+# el índice único global idx_documents_numero_radicado_unique rechaza el segundo y el usuario recibe un error 500
+# sin explicación. Con un código propio por JAL el documento se genera. El consecutivo no quedó con hueco
+# (la reserva se revierte con la transacción).

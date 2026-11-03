@@ -1,0 +1,32 @@
+# npm audit --omit=dev (dependencias de producción)
+## backend
+found 0 vulnerabilities
+exit 0
+## frontend
+found 0 vulnerabilities
+exit 0
+
+# npm audit (incluye dependencias de desarrollo)
+## backend
+@vitest/mocker  <=4.1.11
+form-data  4.0.0 - 4.0.5
+postcss  <=8.5.22
+source-map-js  1.0.0 - 1.2.1
+vite  8.0.0 - 8.1.5
+7 vulnerabilities (3 moderate, 4 high)
+## frontend
+20 vulnerabilities (5 low, 7 moderate, 8 high)
+@babel/core  <=7.29.0
+@vitest/mocker  <=4.1.11
+baseline-browser-mapping  >=2.0.0 <2.11.0
+brace-expansion  <=1.1.20 || 2.0.0 - 2.1.6 || 3.0.0 - 5.0.11
+browserslist  <=4.28.6
+deepmerge  >=4.2.0
+esbuild  <=0.24.2
+fast-uri  3.0.0 - 3.1.8
+js-yaml  4.0.0 - 4.3.1
+postcss  <=8.5.22
+postcss-selector-parser  <=6.1.4
+serialize-javascript  <7.1.3
+source-map-js  1.0.0 - 1.2.1
+undici  7.0.0 - 7.30.0

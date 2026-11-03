@@ -22,6 +22,10 @@ Genera documentos oficiales DOCX y PDF, funciona offline y permite acceso remoto
 
 ---
 
+## Documentación para la entrega
+
+El punto de entrada de la documentación institucional (estado real, requisitos, arquitectura, manuales, despliegue, operación, replicación, seguridad, datos personales, licencias, pruebas y entrega) es [`docs/00_LEEME/INDICE_GENERAL.md`](docs/00_LEEME/INDICE_GENERAL.md).
+
 ## Diseño
 
 Sistema visual «El archivo vivo de la comunidad» (paleta, tipografía, componentes, movimiento y accesibilidad) en [`docs/design/`](docs/design/):
@@ -272,7 +276,7 @@ VITE_API_URL=/v1
 
 ## Backup en Google Drive
 
-El módulo de backup permite guardar copias de seguridad cifradas en Google Drive y localmente.
+El módulo de backup guarda copias de seguridad en Google Drive y localmente. Los archivos zip **no van cifrados**: protégelos como información con datos personales. Lo que sí se cifra en la base de datos (con `ENCRYPTION_KEY`) son los tokens de acceso a Google Drive.
 
 ### Configurar credenciales OAuth
 
