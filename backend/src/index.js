@@ -4,6 +4,7 @@ const app    = require('./app');
 const { sequelize } = require('./models');
 const { checkAutoBackups } = require('./services/driveBackupService');
 const wordConverter = require('./services/wordConverter');
+const { sendAlert } = require('./services/alertService');
 
 const PORT      = parseInt(process.env.PORT || '3001', 10);
 const BIND_HOST = '0.0.0.0';
@@ -51,7 +52,10 @@ function fatal(kind, err) {
   logger.error(`${kind} — el proceso se reiniciará`, { error: err?.message || String(err), stack: err?.stack });
   if (crashing) return;
   crashing = true;
-  shutdown(kind);
+  // Se intenta avisar antes de cerrar; shutdown() fuerza la salida a los 10 s de todos modos
+  sendAlert(kind, { summary: `el proceso se reinicia por ${kind} (${err?.name || 'Error'})` })
+    .catch(() => {})
+    .finally(() => shutdown(kind));
 }
 process.on('unhandledRejection', (reason) => fatal('unhandledRejection', reason));
 process.on('uncaughtException', (err) => fatal('uncaughtException', err));

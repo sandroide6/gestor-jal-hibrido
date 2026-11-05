@@ -1,6 +1,7 @@
 'use strict';
 const logger = require('../config/logger');
 const E = require('../config/errorCodes');
+const { sendAlert } = require('../services/alertService');
 
 // Errores de Sequelize que significan "no hay base", no "la petición está mal" ni un
 // fallo del código. Se responden 503 con Retry-After (auditoría 2026-11-05, P2-3):
@@ -18,6 +19,7 @@ const DB_UNAVAILABLE_ERRORS = new Set([
 function errorHandler(err, req, res, next) {
   if (DB_UNAVAILABLE_ERRORS.has(err.name)) {
     logger.error('Base de datos no disponible', { requestId: req.id, name: err.name, error: err.message, method: req.method, url: req.originalUrl });
+    sendAlert('db_unavailable', { summary: 'la base de datos no responde (503)', path: req.originalUrl, requestId: req.id }).catch(() => {});
     res.set('Retry-After', '30');
     return res.status(503).json({
       error: true,
@@ -38,6 +40,7 @@ function errorHandler(err, req, res, next) {
   const requestId = req.id;
 
   if (status >= 500) {
+    sendAlert(`5xx:${err.name || 'Error'}`, { summary: `error interno ${status} (${err.name || 'Error'})`, path: req.originalUrl, requestId }).catch(() => {});
     logger.error('Unhandled error', { requestId, status, message: err.message, method: req.method, url: req.originalUrl, stack: err.stack });
   } else {
     logger.warn('Client error', { requestId, status, message, method: req.method, url: req.originalUrl });

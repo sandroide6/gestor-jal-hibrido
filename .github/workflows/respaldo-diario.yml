@@ -66,6 +66,26 @@ jobs:
           TARGET_DATABASE_URL: postgresql://postgres:verificacion@localhost:5433/postgres
         run: deploy/backup/restaurar.sh respaldos/*.dump.gpg --confirmar
 
+      # Supabase Free admite 500 MB; por encima pasa la base a solo lectura (auditoría
+      # 2026-11-05, P1-2). Aviso al superar DB_SIZE_ALERT_MB (variable del repositorio,
+      # por defecto 350 MB = 70 %).
+      - name: Comprobar el tamaño de la base
+        env:
+          LIMITE_MB: ${{ vars.DB_SIZE_ALERT_MB || '350' }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: |
+          mb=$(psql "$DATABASE_URL" -X -A -t -c "SELECT round(pg_database_size(current_database())/1048576.0)")
+          echo "Tamaño de la base: ${mb} MB (aviso a partir de ${LIMITE_MB} MB)"
+          echo "### Tamaño de la base: ${mb} MB" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$mb" -ge "$LIMITE_MB" ]; then
+            echo "::warning::La base ocupa ${mb} MB; el plan gratuito de Supabase admite 500 MB"
+            msg="Gestor JAL: la base ocupa ${mb} MB (aviso desde ${LIMITE_MB} MB; el plan gratis admite 500 MB)"
+            if [ -n "$ALERT_WEBHOOK_URL" ]; then
+              if echo "$ALERT_WEBHOOK_URL" | grep -q 'ntfy.sh/'; then curl -s -m 20 -d "$msg" "$ALERT_WEBHOOK_URL" || true
+              else curl -s -m 20 -H 'Content-Type: application/json' -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$ALERT_WEBHOOK_URL" || true; fi
+            fi
+          fi
+
       - name: Guardar respaldo cifrado (30 días)
         uses: actions/upload-artifact@v4
         with:
@@ -80,6 +100,6 @@ jobs:
           ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
         run: |
           [ -z "$ALERT_WEBHOOK_URL" ] && exit 0
-          curl -s -m 20 -H 'Content-Type: application/json' \
-            -d "{\"text\":\"Gestor JAL: falló el respaldo diario. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-            "$ALERT_WEBHOOK_URL" || true
+          msg="Gestor JAL: falló el respaldo diario. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if echo "$ALERT_WEBHOOK_URL" | grep -q 'ntfy.sh/'; then curl -s -m 20 -H 'Priority: high' -d "$msg" "$ALERT_WEBHOOK_URL" || true
+          else curl -s -m 20 -H 'Content-Type: application/json' -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$ALERT_WEBHOOK_URL" || true; fi

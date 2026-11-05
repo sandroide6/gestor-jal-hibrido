@@ -1,23 +1,64 @@
-# Supabase (plan gratis) pausa la base tras ~7 días sin uso; Render duerme el backend.
-# Llamar a /v1/health cada 3 días toca la base y evita la pausa.
-name: Keepalive
+# Monitor de disponibilidad y keepalive (auditoría 2026-11-05, P1-3 y P1-4).
+#
+# Consulta /v1/health a través de Vercel (ver horario abajo). Eso:
+#   - toca la base, así Supabase (plan gratis) no se pausa por inactividad;
+#   - mantiene despierto el backend de Render (sin arranques en frío de 30–60 s, que
+#     además empujaban la app al modo sin conexión);
+#   - detecta caídas: tras 3 fallos seguidos (unos 3 minutos) el job falla, GitHub envía
+#     un correo de "workflow failed" y, si existe el secreto ALERT_WEBHOOK_URL, avisa ahí.
+# GitHub puede retrasar los cron unos minutos en horas de carga: para avisos al minuto,
+# añade además un monitor externo (UptimeRobot o Better Stack) sobre la misma URL.
+# En repositorios públicos GitHub desactiva los workflows programados tras 60 días sin
+# actividad en el repositorio y lo avisa por correo: si pasa, reactívalo en Actions.
+name: Monitor y keepalive
 
 on:
   schedule:
-    - cron: '0 12 */3 * *'
+    # Cada 10 min de 06:00 a 20:59 en Colombia (11:00–01:59 UTC) y una vez por hora de
+    # noche. Así Render no se duerme en horario de uso pero el servicio no queda encendido
+    # las 24 h: el plan gratis de Render da 750 horas al mes por espacio de trabajo, y
+    # 24 h × 31 días = 744 h dejaría sin horas a cualquier otro servicio gratuito.
+    - cron: '*/10 0-1,11-23 * * *'
+    - cron: '0 2-10 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monitor
+  cancel-in-progress: true
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      HEALTH_URL: ${{ vars.HEALTH_URL || 'https://gestor-jal-frontend-navy.vercel.app/v1/health' }}
     steps:
-      - name: Ping backend (despierta Render y consulta la base)
+      - name: Consultar /v1/health (despierta Render y consulta la base)
         run: |
+          fails=0
           for i in 1 2 3 4 5 6; do
-            code=$(curl -s -m 90 -o /dev/null -w '%{http_code}' https://gestor-jal-frontend-navy.vercel.app/v1/health || true)
-            echo "intento $i: $code"
-            [ "$code" = "200" ] && exit 0
+            code=$(curl -s -m 90 -o body.json -w '%{http_code}' "$HEALTH_URL" || true)
+            echo "intento $i: HTTP $code"
+            if [ "$code" = "200" ]; then cat body.json; echo; exit 0; fi
+            fails=$((fails+1))
+            [ "$fails" -ge 3 ] && [ "$code" != "000" ] && break
             sleep 30
           done
-          echo "::error::El backend no respondió 200 (¿Supabase pausado o Render caído?)"
+          echo "::error::El backend no respondió 200 (último código: $code). ¿Supabase pausado, Render caído o despliegue fallido?"
           exit 1
+
+      - name: Avisar si falló
+        if: failure()
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: |
+          [ -z "$ALERT_WEBHOOK_URL" ] && exit 0
+          msg="Gestor JAL: /v1/health no responde. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if echo "$ALERT_WEBHOOK_URL" | grep -q 'ntfy.sh/'; then
+            curl -s -m 20 -H 'Title: Gestor JAL caido' -H 'Priority: urgent' -d "$msg" "$ALERT_WEBHOOK_URL" || true
+          else
+            curl -s -m 20 -H 'Content-Type: application/json' -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$ALERT_WEBHOOK_URL" || true
+          fi
