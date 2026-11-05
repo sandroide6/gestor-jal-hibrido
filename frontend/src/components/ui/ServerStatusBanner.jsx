@@ -28,7 +28,7 @@ export default function ServerStatusBanner() {
     if (backendStatus === 'ok' || !isOnline || pollingRef.current) return undefined;
     pollingRef.current = true;
 
-    const base = (import.meta.env.VITE_API_URL || '').replace(/\/v1\/?$/, '');
+    const base = (import.meta.env.VITE_API_URL || '/v1').replace(/\/v1\/?$/, '');
     let cancelled = false;
 
     const poll = async () => {

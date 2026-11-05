@@ -8,4 +8,4 @@ export const uploadFirma   = (file, token)   => {
   return api.post('/users/me/firma', form, { token, isFormData: true });
 };
 export const deleteFirma   = (token)         => api.delete('/users/me/firma', { token });
-export const getFirmaUrl   = ()              => `${import.meta.env.VITE_API_URL || ''}/users/me/firma`;
+export const getFirmaUrl   = ()              => `${import.meta.env.VITE_API_URL || '/v1'}/users/me/firma`;
