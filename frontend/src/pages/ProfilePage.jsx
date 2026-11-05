@@ -14,7 +14,7 @@ import Icon from '../components/ui/Icon';
 import { ConfirmDialog } from '../components/ui/Dialog';
 
 export default function ProfilePage() {
-  const { token, user, setToken, logout } = useAuthStore();
+  const { token, logout } = useAuthStore();
   const [profile, setProfile]   = useState(null);
   const [loading, setLoading]   = useState(true);
   const [msg, setMsg]           = useState(null); // { type: 'ok'|'err', text }

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export const useNotificationsStore = create((set, get) => ({
+export const useNotificationsStore = create((set) => ({
   notifications: [],
   unread: 0,
   loading: false,

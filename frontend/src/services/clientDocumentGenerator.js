@@ -8,7 +8,7 @@ import Docxtemplater from 'docxtemplater';
 
 // ── DOCX desde plantilla cacheada (modo offline con template) ─
 
-export async function generateDocxBlobFromTemplate({ templateBuffer, data, signatureBuffer, signatureMime }) {
+export async function generateDocxBlobFromTemplate({ templateBuffer, data }) {
   // templateBuffer: ArrayBuffer guardado en IndexedDB
   const zip = new PizZip(templateBuffer);
 
