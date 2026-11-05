@@ -22,6 +22,8 @@ Detalle, comandos y evidencias antes/después de cada punto en `auditoria/CORREC
 - Cambiar el rol o el correo de un usuario cierra sus sesiones; no se puede quitar el último administrador activo
 - TLS verificado hacia la base con `DB_SSL_CA` o `DB_SSL_VERIFY`
 - Las respuestas de error 4xx ya no incluyen la traza fuera de producción
+- Con la base caída, `authenticate` ya no confía en el token (dejaba pasar a usuarios desactivados, sesiones revocadas y contraseñas pendientes de cambio): responde 503 `DB_UNAVAILABLE`
+- Dependabot mensual para backend, frontend y GitHub Actions
 - joi 17.13.9 y multer 2.x. Quedan 5 avisos moderados solo de desarrollo (sequelize-cli → js-beautify), aceptados y documentados
 
 ### Agregado

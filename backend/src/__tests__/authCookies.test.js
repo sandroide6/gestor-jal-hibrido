@@ -13,6 +13,7 @@ const request = require('supertest');
 const jwt     = require('jsonwebtoken');
 const app     = require('../app');
 const models  = require('../models');
+const { mockActiveSessionUser } = require('./helpers/activeUser');
 const authService = require('../services/authService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
@@ -22,7 +23,7 @@ function makeToken(payload) {
 }
 
 function mockOfflineDb() {
-  return vi.spyOn(models.User, 'findByPk').mockRejectedValue(new Error('test-db-offline'));
+  return mockActiveSessionUser();
 }
 
 function cookieMap(res) {

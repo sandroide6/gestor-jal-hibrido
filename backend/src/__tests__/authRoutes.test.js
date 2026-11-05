@@ -6,6 +6,7 @@ const request = require('supertest');
 const jwt     = require('jsonwebtoken');
 const app     = require('../app');
 const models  = require('../models');
+const { mockActiveSessionUser } = require('./helpers/activeUser');
 const authService = require('../services/authService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
@@ -14,9 +15,9 @@ function makeToken(payload) {
   return jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' });
 }
 
-// Fuerza el path de "BD no disponible" en authenticate → el middleware confía en el token (offline tolerance)
+// Sesión simulada sin base: authenticate recibe un usuario activo (helpers/activeUser.js)
 function mockActiveUser() {
-  return vi.spyOn(models.User, 'findByPk').mockRejectedValue(new Error('test-db-offline'));
+  return mockActiveSessionUser();
 }
 
 afterEach(() => vi.restoreAllMocks());

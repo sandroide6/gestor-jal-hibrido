@@ -103,8 +103,12 @@ async function authenticate(req, res, next) {
         });
       }
     }
-  } catch {
-    // Si la BD no está disponible, confiar en el token (offline tolerance)
+  } catch (err) {
+    // Auditoría 2026-11-05 (P2-3): antes se confiaba en el token si la base no respondía,
+    // lo que dejaba pasar a usuarios desactivados, sesiones revocadas y contraseñas
+    // pendientes de cambio. Ahora falla cerrado: errorHandler responde 503 DB_UNAVAILABLE
+    // (con Retry-After) si es un error de conexión, o 500 si es otro.
+    return next(err);
   }
 
   req.user = payload;

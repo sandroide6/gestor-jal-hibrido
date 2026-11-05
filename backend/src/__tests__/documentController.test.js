@@ -9,6 +9,7 @@ const request = require('supertest');
 const jwt     = require('jsonwebtoken');
 const app     = require('../app');
 const models  = require('../models');
+const { mockActiveSessionUser } = require('./helpers/activeUser');
 const docService = require('../services/documentService');
 const audit       = require('../services/auditService');
 const notificationService = require('../services/notificationService');
@@ -29,7 +30,7 @@ function edilToken() {
 }
 
 function mockOfflineDb() {
-  return vi.spyOn(models.User, 'findByPk').mockRejectedValue(new Error('test-db-offline'));
+  return mockActiveSessionUser();
 }
 
 afterEach(() => vi.restoreAllMocks());
