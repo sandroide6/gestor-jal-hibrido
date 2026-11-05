@@ -1,0 +1,4 @@
+# Migraciones: db:migrate -> db:migrate:undo:all -> db:migrate -> db:seed:all (PostgreSQL 16)
+Operaciones "migrated": 54
+Operaciones "reverted": 26
+exit 0

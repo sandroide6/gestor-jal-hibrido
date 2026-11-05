@@ -61,13 +61,20 @@ def run_restore(archivo: str | None = None):
                     '-d', parsed.path.lstrip('/'),
                     '-f', str(dump),
                     '--no-password',
+                    # Todo o nada: ante el primer error se deshace la restauración completa.
+                    # Antes psql seguía tras cada error y terminaba con código 0, así que el
+                    # script decía "restaurada" aunque las tablas existentes no se tocaran.
+                    '-v', 'ON_ERROR_STOP=1', '--single-transaction', '--quiet',
                 ],
                 env=pg_env,
             )
             if r.returncode == 0:
                 ok("Base de datos restaurada")
             else:
-                error("Error restaurando la base de datos — revisa los permisos de PostgreSQL")
+                error("Error restaurando la base de datos: no se aplicó ningún cambio")
+                warn("Si el backup es anterior a esta versión (sin --clean), restáuralo en una base vacía:")
+                warn("crea una base nueva, apunta DATABASE_URL a ella y repite la restauración")
+                return
         else:
             warn("No se encontró database.sql en el backup")
 

@@ -1,0 +1,32 @@
+# Prueba de respaldo y restauración con scripts/backup.py y scripts/restore.py — 2026-10-29
+# Entorno: Linux, PostgreSQL 16, Python 3.13, copia de los scripts en una carpeta temporal
+# (no se usó la base real). Base de prueba: 4 usuarios, 1 documento con PDF (180 791 bytes), 14 registros de auditoría.
+
+## Con los scripts tal como estaban en main (91a14ac)
+1. Backup:                         OK (zip con database.sql y documentos/)
+2. Pérdida simulada (DELETE de documentos y auditoría), restaurar sobre la misma base:
+   psql terminó con código 0 y 80 errores "already exists"; las filas borradas sí volvieron
+   (las tablas existían vacías y COPY pudo cargar).
+3. Dato modificado (UPDATE beneficiary_name='DATO ALTERADO'), restaurar sobre la misma base:
+   83 errores ("relation documents already exists", duplicados de llave primaria);
+   el script imprimió "[OK] Base de datos restaurada" y "[OK] Restauración completada",
+   pero el dato siguió en 'DATO ALTERADO'.  → FALLA: informa éxito sin restaurar.
+4. Restaurar en una base nueva y vacía: OK (mismos conteos y bytes que el original).
+
+## Con la corrección (pg_dump --clean --if-exists --no-owner --no-privileges;
+##                    psql -v ON_ERROR_STOP=1 --single-transaction)
+A. Base alterada (dato modificado, auditoría borrada, usuario intruso agregado), restaurar sobre la misma base:
+   0 errores; estado final idéntico al original
+   (users=4 documents=1 audit_logs=14 beneficiario=Juan Pérez de Prueba pdf_bytes=180791).  → PASA
+B. Backup ANTIGUO (sin --clean) sobre una base con datos:
+   se detiene en el primer error, imprime "[ER] Error restaurando la base de datos: no se aplicó ningún cambio"
+   y la base queda exactamente como estaba.  → PASA (falla de forma segura y visible)
+C. Backup nuevo en base vacía: OK, mismos conteos.  → PASA
+D. pg_dump falla (base inexistente): "[ER] Backup cancelado: no se generó ningún archivo"; no se crea zip.  → PASA
+
+## Limitaciones
+- Probado en Linux. No se probó en Windows (destino de los .bat), aunque los scripts no dependen del sistema operativo.
+- No cubre la base de Supabase de producción ni sus copias propias.
+- Los zip que genera el panel (Copias de seguridad / Drive) NO tienen procedimiento de restauración en el sistema;
+  esta prueba solo valida el respaldo por línea de comandos (pg_dump).
+- gestor.py termina con código 0 aunque la restauración falle; el resultado se lee en los mensajes [OK]/[ER].

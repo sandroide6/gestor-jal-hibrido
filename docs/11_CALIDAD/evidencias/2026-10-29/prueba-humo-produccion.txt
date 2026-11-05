@@ -1,0 +1,52 @@
+# Prueba de humo de extremo a extremo — 2026-10-29
+# Backend local en NODE_ENV=production (claves RSA, ENCRYPTION_KEY), PostgreSQL 16 vacío con migraciones y seeders,
+# segunda JAL creada solo para probar aislamiento. Datos ficticios. Script: prueba-humo-produccion.cjs
+
+PASA S01 GET /health responde 200 con BD ok (200)
+PASA S02 /metrics oculto en producción sin token (404)
+PASA S03 Ruta protegida sin sesión responde 401 (401)
+FALLA S04 Swagger UI no se publica en producción (200)
+PASA S05 Login con contraseña incorrecta se rechaza (401)
+PASA S06 Login del administrador con cookies httpOnly y CSRF (200)
+PASA S07 Petición que modifica datos sin token CSRF se rechaza (403)
+PASA S08 Registro de aceptación de la política (consentimiento del usuario) (200)
+PASA S09 Administrador crea usuario auxiliar (201) 
+PASA S10 Administrador crea usuario edil (201)
+PASA S11 Subida de firma (PNG) del usuario (200)
+PASA S12 Listado de tipos de documento incluye Certificado de Residencia (200, 10 tipos)
+PASA S13 Generación de Certificado de Residencia con radicado (201) radicado=2026-JAL-SAL-000001
+PASA S14 Descarga del PDF generado (200, 180791 bytes)
+PASA S15 Descarga del Word generado (200, 287705 bytes)
+PASA S16 Búsqueda de persona ya atendida por cédula (200) {"person":{"nombre":"Juan Pérez de Prueba","tipo_documento":"Cédula de ciudadanía","lugar_documento":"Medellín"}}
+PASA S17 Login del auxiliar (200)
+PASA S18 Auxiliar NO puede listar usuarios (403) (403)
+PASA S19 Auxiliar NO puede listar todos los documentos de la JAL (403) (403)
+PASA S20 Auxiliar NO puede eliminar documentos (403) (403)
+PASA S21 Auxiliar NO puede ver la auditoría (403) (403)
+PASA S22 Auxiliar ve su propia lista de documentos (200)
+PASA S23 Auxiliar intenta descargar un documento de otro usuario (informativo: 404)
+PASA S24 Edil puede listar los documentos de la JAL (200)
+PASA S25 Edil marca un documento como revisado (200)
+PASA S26 Edil NO puede crear usuarios (403) (403)
+PASA S27 Login del administrador de una segunda JAL (creada solo para la prueba) (200)
+PASA S28 Aislamiento: la JAL 2 no ve documentos de la JAL 1 (200, 0 documentos)
+PASA S29 Aislamiento: la JAL 2 no abre el detalle de un documento de la JAL 1 (404)
+PASA S30 Aislamiento: la JAL 2 no descarga un documento de la JAL 1 (404)
+PASA S31 Aislamiento: la JAL 2 solo ve sus propios usuarios (200, 1 usuarios)
+PASA S32 Aislamiento: la JAL 2 no encuentra personas atendidas por la JAL 1 (200) {"person":null}
+PASA S33 Aislamiento: la auditoría de la JAL 2 no muestra acciones de la JAL 1 (200, 0 registros)
+PASA S34 Aislamiento: la JAL 2 no ve los tipos de documento de la JAL 1 (200, 0 tipos)
+PASA S35 Auditoría registra creación de documento y de usuarios (200)
+PASA S36 Descarga de copia completa (zip) por el administrador (200, 1887667 bytes)
+PASA S37 Exportación Excel de documentos (200, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)
+PASA S38 open-folder responde 501 fuera de Windows sin tumbar el proceso (501)
+PASA S39 El proceso sigue vivo después de las pruebas (200)
+
+Total: 39, pasan: 38, fallan: 1
+
+# Nota sobre S04 (revisión manual posterior)
+# S04 se marcó FALLA porque el criterio solo miraba el código HTTP. Con el build del frontend presente,
+# el backend responde a cualquier ruta desconocida con index.html (aplicación de una sola página), y
+# /api-docs y /api-docs.json devolvieron ese HTML (200, text/html), no la interfaz Swagger.
+# Comprobado con: curl -s http://localhost:3901/api-docs | head  →  "<!doctype html> ... Sistema de gestión documental"
+# Conclusión: Swagger no se publica en producción. El fallo era del criterio de la prueba, no del sistema.

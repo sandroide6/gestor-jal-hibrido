@@ -44,6 +44,9 @@ def run_backup():
             '-d', parsed.path.lstrip('/'),
             '-f', str(dump_file),
             '--no-password',
+            # --clean/--if-exists: el dump borra y recrea cada objeto, para que la
+            # restauración reemplace la base en lugar de chocar con lo que ya existe.
+            '--clean', '--if-exists', '--no-owner', '--no-privileges',
         ],
         env=pg_env,
         capture_output=True,
@@ -55,6 +58,10 @@ def run_backup():
         error(f"pg_dump falló: {r.stderr.strip()}")
         warn("Asegúrate de que pg_dump esté en el PATH (viene con la instalación de PostgreSQL)")
         warn("Verifica que: C:\\Program Files\\PostgreSQL\\16\\bin  esté en tu variable PATH")
+        # Sin la base de datos el zip no sirve para restaurar: no se crea un backup incompleto.
+        shutil.rmtree(carpeta_tmp)
+        error("Backup cancelado: no se generó ningún archivo")
+        return
 
     # ── Documentos generados ─────────────────────────────────────
     storage = Path(env_vars.get('STORAGE_PATH', str(BACKEND_DIR / 'data' / 'output')))

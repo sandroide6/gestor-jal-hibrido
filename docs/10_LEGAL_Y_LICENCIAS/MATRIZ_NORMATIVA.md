@@ -1,0 +1,23 @@
+# Matriz normativa
+
+> Relaciona normas con el producto para orientar la revisión jurídica. **No certifica cumplimiento.** "Consultada" indica que la fuente se revisó en línea durante esta revisión; algunas páginas de Función Pública no permiten la lectura automática y se citan por su dirección. Fecha de consulta: **31-10-2026**, salvo que se indique otra.
+
+| Norma | Tema | Qué exige, en lo pertinente | Relación con el Gestor JAL | Estado | Fuente oficial | Consultada |
+|---|---|---|---|---|---|---|
+| Constitución Política, art. 15 | Intimidad y habeas data | Derecho a conocer, actualizar y rectificar la información | Datos de ciudadanos y usuarios | Ver Ley 1581 | Secretaría del Senado, base documental | No |
+| Constitución Política, art. 318 | JAL | Crea las Juntas Administradoras Locales en comunas y corregimientos | Define la entidad destinataria | Informativo | Secretaría del Senado | No |
+| Ley 1581 de 2012 | Protección de datos personales | Principios (art. 4), datos sensibles (art. 5), autorización (art. 9), deber de informar (art. 12), consultas y reclamos (arts. 14 y 15), deberes del responsable y del encargado (arts. 17 y 18) | Datos de ciudadanos en documentos, copias, exportaciones | **Brechas**: sin autorización ni aviso a ciudadanos; responsable sin definir ([Protección de datos](../09_SEGURIDAD_Y_PRIVACIDAD/PROTECCION_DE_DATOS.md)) | https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=49981 | Sí (por referencia; página con bloqueo de lectura automática) |
+| Decreto 1074 de 2015, Libro 2, Parte 2, Título 2, Capítulos 25 y 26 | Reglamento de la Ley 1581 (compila los decretos 1377 de 2013 y 886 de 2014) | Política de tratamiento, aviso de privacidad, autorización, transferencias, Registro Nacional de Bases de Datos cuando aplique | Igual que la anterior; la política en pantalla cita aún el 1377 | Pendiente | Función Pública, Gestor Normativo | No |
+| Ley 23 de 1982, art. 20 (modificado por Ley 1450 de 2011, art. 28) | Derecho de autor, obras por encargo | Presunción de transferencia de derechos patrimoniales al encargante en la medida necesaria para sus actividades habituales; contrato por escrito | Titularidad del software | **Bloqueado** por falta del contrato ([Análisis de PI](ANALISIS_DE_LICENCIAS_Y_PI.md)) | Función Pública, Gestor Normativo | Sí (texto del artículo) |
+| Decisión Andina 351 de 1993 | Régimen común de derecho de autor | Software protegido como obra literaria (art. 23); titularidad de persona distinta del autor (art. 9); definiciones (art. 3) | Titularidad y licencia | Informativo | https://normograma.mintic.gov.co/docs/pdf/decision_comisioncandina_dec351.pdf | Sí |
+| Ley 1712 de 2014 | Transparencia y acceso a la información pública | Obligaciones de sujetos obligados, incluida accesibilidad de la información | Aplica si el responsable del sistema es sujeto obligado | Por confirmar | Secretaría del Senado | No |
+| Resolución 1519 de 2020 (MinTIC), Anexo 1 | Accesibilidad web | Directrices de accesibilidad basadas en WCAG para sujetos obligados de la Ley 1712 | Interfaz web del sistema | Parcial: axe-core sin violaciones; sin revisión manual. Confirmar si aplica y el nivel exigido | https://www.mintic.gov.co/portal/715/w3-article-161060.html | Sí |
+| Ley 1618 de 2013 | Derechos de las personas con discapacidad | Accesibilidad de la información y las comunicaciones | Interfaz y tutoriales (sin subtítulos) | Pendiente | Secretaría del Senado | No |
+| Ley 527 de 1999 | Mensajes de datos y firma electrónica y digital | Requisitos de validez de la firma electrónica y digital | El sistema inserta una **imagen** de la firma; no es firma digital certificada | Decisión de la JAL sobre el valor del documento | Secretaría del Senado | No |
+| Ley 594 de 2000 | Archivo | Conservación y tablas de retención documental | Documentos emitidos y su conservación | Pendiente (sin TRD) | Secretaría del Senado | No |
+| Ley 2166 de 2021 | Organismos de acción comunal | Rige las JAC, no las JAL | Se cita solo para diferenciar la entidad | No aplica al producto | Secretaría del Senado | No |
+| Circular 018 de 2021, Procuraduría General de la Nación | Cumplimiento de la Ley 1712 y la Resolución 1519 | Llamado a los sujetos obligados | Contexto de accesibilidad | Informativo | https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=171926 | Sí (por referencia) |
+
+## Normas institucionales que faltan
+
+No se tuvieron: lineamientos de seguridad de la información o de desarrollo de software del Distrito de Medellín, política de tratamiento de datos del Distrito, ni la tabla de retención documental aplicable. Están listadas en [Documentos que faltan](../01_GESTION/MATRIZ_CONTRACTUAL.md#3-documentos-que-faltan).

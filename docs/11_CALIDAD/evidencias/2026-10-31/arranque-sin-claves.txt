@@ -1,0 +1,7 @@
+# Arranque del backend en NODE_ENV=production sin JWT_SECRET, JWT_PRIVATE_KEY ni ENCRYPTION_KEY — 2026-10-31
+# Comando: env -i PATH=… NODE_ENV=production PORT=3903 DATABASE_URL=<base local de prueba> node src/index.js
+
+{"level":"error","timestamp":"2026-10-31T08:29:14.104Z","message":"SEGURIDAD: Variables con valores por defecto inseguros en producción — servidor detenido","variables":["JWT_SECRET","JWT_PRIVATE_KEY","ENCRYPTION_KEY"]}
+exit=1
+
+# Conclusión: el servidor se niega a arrancar con las claves de ejemplo o ausentes.
