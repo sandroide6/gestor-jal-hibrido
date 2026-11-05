@@ -1,0 +1,23 @@
+# Supabase (plan gratis) pausa la base tras ~7 días sin uso; Render duerme el backend.
+# Llamar a /v1/health cada 3 días toca la base y evita la pausa.
+name: Keepalive
+
+on:
+  schedule:
+    - cron: '0 12 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend (despierta Render y consulta la base)
+        run: |
+          for i in 1 2 3 4 5 6; do
+            code=$(curl -s -m 90 -o /dev/null -w '%{http_code}' https://gestor-jal-frontend-navy.vercel.app/v1/health || true)
+            echo "intento $i: $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 30
+          done
+          echo "::error::El backend no respondió 200 (¿Supabase pausado o Render caído?)"
+          exit 1
