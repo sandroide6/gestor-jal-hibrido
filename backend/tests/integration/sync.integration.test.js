@@ -15,7 +15,8 @@ let session;
 beforeAll(async () => {
   app = require('../../src/app');
   ({ Document } = require('../../src/models'));
-  session = await h.login(app);
+  const admin = await h.createTestUser('administrador');
+  session = await h.login(app, admin.email);
   await h.ensureSignature(app, session);
 }, 60000);
 

@@ -57,11 +57,13 @@ app.disable('x-powered-by');
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
   .split(',').map((o) => o.trim());
 
-// Anclados con ^ (inicio) y $ (fin), sin comodines abiertos: el patrón de ngrok
-// anterior (/\.ngrok[-.].*$/, sin ancla de inicio y terminando en `.*$`) hacía match
-// con CUALQUIER origen que contuviera la subcadena ".ngrok-" o ".ngrok." en cualquier
-// posición — ej. "https://x.ngrok-evil.com" (un dominio atacante) pasaba la validación.
-const allowedPatterns = [
+// Patrones de túneles públicos (ngrok, Cloudflare, serveo, loca.lt). Auditoría de
+// producción 2026-11-05 (P0-3): cualquiera puede crear un subdominio de estos servicios
+// gratis, así que aceptarlos con `credentials: true` dejaba que una página ajena leyera
+// datos con la sesión de la víctima. Ahora están APAGADOS salvo ALLOW_TUNNEL_ORIGINS=true.
+// El modo túnel local no los necesita: ahí el frontend se sirve desde el mismo host
+// que la API, y ese caso lo cubre isSameOrigin().
+const tunnelPatterns = [
   /^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/,
   /^https:\/\/[a-z0-9-]+\.serveousercontent\.com$/,
   /^https:\/\/[a-z0-9-]+\.serveo\.net$/,
@@ -69,14 +71,31 @@ const allowedPatterns = [
   /^https:\/\/[a-z0-9-]+\.loca\.lt$/,
 ];
 
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin)) return cb(null, true);
-    if (allowedPatterns.some((re) => re.test(origin))) return cb(null, true);
-    cb(new Error(`Origen no permitido por CORS: ${origin}`));
-  },
-  credentials: true,
+// El navegador manda Origin también en peticiones del mismo sitio (POST, fetch). Si el
+// origen coincide con el host al que llegó la petición, no es cross-site. Un sitio ajeno
+// no puede fijar Host ni X-Forwarded-Host sin disparar un preflight, que no las lleva.
+function isSameOrigin(req, origin) {
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  try {
+    return !!host && new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedOrigin(req, origin) {
+  if (allowedOrigins.includes(origin)) return true;
+  if (isSameOrigin(req, origin)) return true;
+  if (process.env.ALLOW_TUNNEL_ORIGINS === 'true' && tunnelPatterns.some((re) => re.test(origin))) return true;
+  return false;
+}
+
+app.use(cors((req, cb) => {
+  const origin = req.headers.origin;
+  if (!origin) return cb(null, { origin: false });
+  if (isAllowedOrigin(req, origin)) return cb(null, { origin, credentials: true });
+  // 403 (antes 500 con traza completa en el log): es una petición rechazada, no un fallo
+  cb(Object.assign(new Error(`Origen no permitido por CORS: ${origin}`), { status: 403, code: 'FORBIDDEN' }));
 }));
 
 app.use(rateLimit({

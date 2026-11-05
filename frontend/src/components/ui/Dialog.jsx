@@ -8,16 +8,16 @@ import Spinner from './Spinner';
  * Diálogo modal accesible: foco atrapado, Escape cierra, título y descripción enlazados.
  * En móvil ocupa el ancho disponible y se desplaza si el contenido es alto.
  */
-export default function Dialog({ title, description, children, onClose, role = 'dialog', size = 'md', footer }) {
+export default function Dialog({ title, description, children, onClose, role = 'dialog', size = 'md', footer, dismissible = true }) {
   const ref = useRef(null);
   const titleId = useId();
   const descId = useId();
-  useFocusTrap(ref, { onEscape: onClose });
+  useFocusTrap(ref, { onEscape: dismissible ? onClose : () => {} });
   const width = size === 'lg' ? 'max-w-2xl' : size === 'sm' ? 'max-w-md' : 'max-w-lg';
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-3 sm:p-6">
-      <div className="anim-backdrop absolute inset-0 bg-brand-900/45" onClick={onClose} aria-hidden="true" />
+      <div className="anim-backdrop absolute inset-0 bg-brand-900/45" onClick={dismissible ? onClose : undefined} aria-hidden="true" />
       <div
         ref={ref}
         role={role}
@@ -31,9 +31,9 @@ export default function Dialog({ title, description, children, onClose, role = '
             <h2 id={titleId} className="title-card">{title}</h2>
             {description && <p id={descId} className="mt-1 text-ink-muted">{description}</p>}
           </div>
-          <button type="button" onClick={onClose} className="btn-ghost btn-sm !px-2 -mr-2" aria-label="Cerrar">
+          {dismissible && <button type="button" onClick={onClose} className="btn-ghost btn-sm !px-2 -mr-2" aria-label="Cerrar">
             <Icon name="cerrar" />
-          </button>
+          </button>}
         </div>
         <div className="px-6 pb-6">{children}</div>
         {footer && <div className="flex flex-wrap-reverse justify-end gap-2 border-t border-line bg-gray-50 px-6 py-4 rounded-b-lg">{footer}</div>}
@@ -47,6 +47,7 @@ Dialog.propTypes = {
   description: PropTypes.node,
   children: PropTypes.node,
   onClose: PropTypes.func.isRequired,
+  dismissible: PropTypes.bool,
   role: PropTypes.oneOf(['dialog', 'alertdialog']),
   size: PropTypes.oneOf(['sm', 'md', 'lg']),
   footer: PropTypes.node,

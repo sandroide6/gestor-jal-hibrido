@@ -70,6 +70,12 @@ module.exports = (sequelize) =>
         type: DataTypes.BOOLEAN,
         defaultValue: false,
       },
+      // Mientras sea true solo se puede cambiar la contraseña (ver middleware/authenticate.js)
+      must_change_password: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
       consent_accepted_at: {
         type: DataTypes.DATE,
         allowNull: true,

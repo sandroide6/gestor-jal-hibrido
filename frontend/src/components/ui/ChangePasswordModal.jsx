@@ -7,9 +7,13 @@ import Spinner from './Spinner';
 
 ChangePasswordModal.propTypes = {
   onClose: PropTypes.func.isRequired,
+  // forced: contraseña inicial o asignada por un administrador. No se puede cerrar
+  // hasta cambiarla; el backend bloquea lo demás (auditoría 2026-11-05, P1-6).
+  forced: PropTypes.bool,
+  onChanged: PropTypes.func,
 };
 
-export default function ChangePasswordModal({ onClose }) {
+export default function ChangePasswordModal({ onClose, forced = false, onChanged }) {
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -42,6 +46,7 @@ export default function ChangePasswordModal({ onClose }) {
 
       setSuccess('Contraseña actualizada correctamente.');
       setForm({ currentPassword: '', newPassword: '', confirm: '' });
+      if (onChanged) onChanged();
     } catch (err) {
       setError(err.message || 'Error al cambiar la contraseña');
     } finally {
@@ -50,7 +55,15 @@ export default function ChangePasswordModal({ onClose }) {
   }
 
   return (
-    <Dialog title="Cambiar contraseña" description="Después del cambio, la sesión sigue abierta en este equipo." onClose={saving ? () => {} : onClose} size="sm">
+    <Dialog
+      title={forced ? 'Elige tu propia contraseña' : 'Cambiar contraseña'}
+      description={forced
+        ? 'Entraste con una contraseña inicial o asignada por el administrador. Cámbiala para seguir usando la aplicación.'
+        : 'Después del cambio, la sesión sigue abierta en este equipo.'}
+      onClose={saving || forced ? () => {} : onClose}
+      dismissible={!forced}
+      size="sm"
+    >
       <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
         <div>
           <label className="label" htmlFor="pwd-actual">Contraseña actual</label>
@@ -77,9 +90,11 @@ export default function ChangePasswordModal({ onClose }) {
         {success && <Notice tone="success">{success}</Notice>}
 
         <div className="flex flex-wrap-reverse justify-end gap-2 pt-2">
-          <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
-            {success ? 'Cerrar' : 'Cancelar'}
-          </button>
+          {!forced && (
+            <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>
+              {success ? 'Cerrar' : 'Cancelar'}
+            </button>
+          )}
           {!success && (
             <button type="submit" className="btn-primary" disabled={saving} aria-busy={saving || undefined}>
               {saving && <Spinner />}

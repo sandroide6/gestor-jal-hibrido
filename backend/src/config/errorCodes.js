@@ -13,6 +13,7 @@ const E = {
 
   // Authorization
   FORBIDDEN:                 'FORBIDDEN',
+  PASSWORD_CHANGE_REQUIRED:  'PASSWORD_CHANGE_REQUIRED',
   UNAUTHENTICATED:           'UNAUTHENTICATED',
 
   // Resources

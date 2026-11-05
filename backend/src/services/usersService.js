@@ -54,7 +54,12 @@ async function findJalById(jalId) {
 
 async function createUser({ jalId, name, email, role, password }) {
   const password_hash = await hashPassword(password);
-  return User.create({ id: uuidv4(), jal_id: jalId, name, email, role, password_hash });
+  // La contraseña la eligió el administrador: el usuario debe cambiarla al entrar
+  return User.create({ id: uuidv4(), jal_id: jalId, name, email, role, password_hash, must_change_password: true });
+}
+
+async function countActiveAdmins(jalId) {
+  return User.count({ where: { jal_id: jalId, role: 'administrador', active: true } });
 }
 
 async function deactivateUser(user) {
@@ -95,6 +100,7 @@ module.exports = {
   getUserProfile,
   findJalById,
   createUser,
+  countActiveAdmins,
   deactivateUser,
   reactivateUser,
   updateUser,

@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User, AuditLog } = require('../models');
 const E = require('../config/errorCodes');
+const { tokenIssuedBefore } = require('../utils/tokenRevocation');
 
 const BCRYPT_ROUNDS = 12;
 const JWT_EXPIRY = '8h';
@@ -152,6 +153,7 @@ async function login({ email, password, ip }) {
       role: user.role,
       jal_id: user.jal_id,
       consent_accepted_at: user.consent_accepted_at || null,
+      must_change_password: !!user.must_change_password,
     },
   };
 }
@@ -175,11 +177,9 @@ async function refresh({ refreshToken, ip }) {
 
   // Mismo chequeo que authenticate.js para access tokens: un cambio de contraseña o
   // "cerrar todas las sesiones" invalida también los refresh tokens ya emitidos.
-  if (user.tokens_invalid_before) {
-    const issuedAt = new Date((payload.iat || 0) * 1000);
-    if (issuedAt < new Date(user.tokens_invalid_before)) {
-      throw Object.assign(new Error('Sesión expirada. Inicie sesión nuevamente.'), { status: 401, code: E.AUTH_TOKEN_REVOKED });
-    }
+  // Comparación en segundos: ver utils/tokenRevocation.js
+  if (tokenIssuedBefore(payload, user.tokens_invalid_before)) {
+    throw Object.assign(new Error('Sesión expirada. Inicie sesión nuevamente.'), { status: 401, code: E.AUTH_TOKEN_REVOKED });
   }
 
   const tokenPayload = {

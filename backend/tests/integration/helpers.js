@@ -6,8 +6,8 @@ const fs = require('fs');
 const path = require('path');
 const request = require('supertest');
 
-const ADMIN_EMAIL = 'admin@jal.gov.co';
-const ADMIN_PASSWORD = process.env.ADMIN_INITIAL_PASSWORD || 'Admin1234!';
+const JAL_ID = '00000000-0000-0000-0000-000000000001'; // JAL sembrada por el seeder
+const TEST_PASSWORD = 'Prueba-Integracion-2026';
 const FIRMA_PNG = path.join(__dirname, '..', '..', '..', 'frontend', 'public', 'icons', 'icon-192x192.png');
 
 function cookieValue(res, name) {
@@ -15,7 +15,21 @@ function cookieValue(res, name) {
   return raw ? raw.split(';')[0].slice(name.length + 1) : null;
 }
 
-async function login(app, email = ADMIN_EMAIL, password = ADMIN_PASSWORD) {
+// Crea un usuario de prueba directamente en la base (no depende de la contraseña del
+// administrador sembrado, que desde la migración 0028 está obligado a cambiarla).
+async function createTestUser(role, { mustChange = false } = {}) {
+  const bcrypt = require('bcryptjs');
+  const { v4: uuidv4 } = require('uuid');
+  const { User } = require('../../src/models');
+  const email = `it-${role}-${uniq()}@prueba.co`;
+  const user = await User.create({
+    id: uuidv4(), jal_id: JAL_ID, name: `IT ${role}`, email, role,
+    password_hash: await bcrypt.hash(TEST_PASSWORD, 4), must_change_password: mustChange,
+  });
+  return { id: user.id, email, password: TEST_PASSWORD };
+}
+
+async function login(app, email, password = TEST_PASSWORD) {
   const res = await request(app).post('/v1/auth/login').send({ email, password });
   if (res.status !== 200) throw new Error(`login ${email} falló: ${res.status} ${JSON.stringify(res.body)}`);
   const access = cookieValue(res, 'access_token');
@@ -60,6 +74,6 @@ function simpleFields(cedula) {
 }
 
 module.exports = {
-  ADMIN_EMAIL, ADMIN_PASSWORD, login, ensureSignature, uniq, cookieValue,
+  JAL_ID, TEST_PASSWORD, createTestUser, login, ensureSignature, uniq, cookieValue,
   DOC_TYPE_TEMPLATE, DOC_TYPE_SIMPLE, templateFields, simpleFields,
 };

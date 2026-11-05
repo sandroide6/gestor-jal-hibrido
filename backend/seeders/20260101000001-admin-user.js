@@ -25,10 +25,14 @@ module.exports = {
       { ignoreDuplicates: true }
     );
 
-    // Administrador inicial
-    // Contraseña: Admin1234! — CAMBIAR después del primer login
-    // Contraseña conocida solo para desarrollo: en una BD real define ADMIN_INITIAL_PASSWORD.
-    const passwordHash = await bcrypt.hash(process.env.ADMIN_INITIAL_PASSWORD || 'Admin1234!', 12);
+    // Administrador inicial. La contraseña de ejemplo solo vale para desarrollo y
+    // pruebas; con NODE_ENV=production el seeder exige ADMIN_INITIAL_PASSWORD (auditoría
+    // 2026-11-05, P1-6). En cualquier caso el administrador debe cambiarla al entrar.
+    const initialPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    if (process.env.NODE_ENV === 'production' && (!initialPassword || initialPassword === 'Admin1234!')) {
+      throw new Error('ADMIN_INITIAL_PASSWORD es obligatoria (y distinta de la de ejemplo) para sembrar el administrador en producción');
+    }
+    const passwordHash = await bcrypt.hash(initialPassword || 'Admin1234!', 12);
 
     await queryInterface.bulkInsert(
       'users',
@@ -43,6 +47,7 @@ module.exports = {
           active: true,
           failed_attempts: 0,
           locked_until: null,
+          must_change_password: true,
           created_at: now,
           updated_at: now,
         },

@@ -24,7 +24,7 @@ function errorHandler(err, req, res, next) {
     code,
     message,
     requestId,
-    ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
+    ...(process.env.NODE_ENV !== 'production' && status >= 500 && { stack: err.stack }),
   });
 }
 
