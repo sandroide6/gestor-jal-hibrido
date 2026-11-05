@@ -4,7 +4,7 @@ import { readCsrfCookie } from '../../services/api';
 import Icon from './Icon';
 import Spinner from './Spinner';
 
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+const BASE_URL = import.meta.env.VITE_API_URL || '/v1';
 
 // Indicador de espera sin rebote: el texto dice lo que pasa y el lector de pantalla lo anuncia.
 function Typing() {

@@ -1,6 +1,6 @@
 import { useServerStatusStore } from '../stores/serverStatusStore';
 
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+const BASE_URL = import.meta.env.VITE_API_URL || '/v1';
 
 // Refleja en serverStatusStore si el backend responde y si su base de datos está
 // disponible — en el modo híbrido el backend puede tardar en responder (cold start de

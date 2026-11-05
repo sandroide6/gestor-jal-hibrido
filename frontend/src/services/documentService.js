@@ -209,7 +209,7 @@ export async function generateDocument({ docType, formData, beneficiaryName, ben
 // ── Descarga ──────────────────────────────────────────────
 
 export function getDownloadUrls(docId) {
-  const base = import.meta.env.VITE_API_URL || '';
+  const base = import.meta.env.VITE_API_URL || '/v1';
   return {
     docx: `${base}/documents/${docId}/download?format=docx`,
     pdf:  `${base}/documents/${docId}/download?format=pdf`,

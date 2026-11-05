@@ -85,7 +85,7 @@ describe('api — headers', () => {
     global.fetch.mockResolvedValue(jsonResponse(200, {}));
     await api.get('/foo', { params: { page: 1, limit: 10 } });
     const [url] = global.fetch.mock.calls[0];
-    expect(url).toBe('/foo?page=1&limit=10');
+    expect(url).toBe('/v1/foo?page=1&limit=10');
   });
 });
 
