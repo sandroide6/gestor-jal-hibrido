@@ -19,6 +19,7 @@ const E = {
   // Resources
   NOT_FOUND:                 'NOT_FOUND',
   CONFLICT:                  'CONFLICT',
+  DB_UNAVAILABLE:            'DB_UNAVAILABLE',
   VALIDATION:                'VALIDATION',
   SIGNATURE_MISSING:         'SIGNATURE_MISSING',
 

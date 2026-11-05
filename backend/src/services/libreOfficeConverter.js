@@ -11,7 +11,34 @@ const fs = require('fs');
 // se cuelga si dos procesos headless comparten el mismo perfil de usuario en paralelo
 // — con hasta 7 usuarios concurrentes generando documentos, esto puede pasar.
 class LibreOfficeConverter {
+  // Cada soffice ocupa unos 150–250 MB; Render Free tiene 512 MB. Sin límite, varias
+  // generaciones a la vez podían agotar la memoria (auditoría 2026-11-05, P2-2). Las
+  // demás esperan su turno en orden de llegada.
+  constructor() {
+    this.maxConcurrency = Math.max(1, parseInt(process.env.LIBREOFFICE_MAX_CONCURRENCY || '1', 10) || 1);
+    this.running = 0;
+    this.waiting = [];
+  }
+
+  setMaxConcurrency(n) {
+    this.maxConcurrency = Math.max(1, n);
+  }
+
   async convert(docxBuffer) {
+    if (this.running >= this.maxConcurrency) {
+      await new Promise((resolve) => this.waiting.push(resolve));
+    }
+    this.running++;
+    try {
+      return await this._convertNow(docxBuffer);
+    } finally {
+      this.running--;
+      const next = this.waiting.shift();
+      if (next) next();
+    }
+  }
+
+  async _convertNow(docxBuffer) {
     const id = `loconv_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const workDir = path.join(os.tmpdir(), id);
     const profileDir = path.join(os.tmpdir(), `${id}_profile`);

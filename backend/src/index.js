@@ -36,13 +36,26 @@ function shutdown(signal) {
       logger.error('Error al cerrar Sequelize', { message: err.message });
     }
     logger.info('Servidor cerrado.');
-    process.exit(0);
+    process.exit(signal === 'SIGTERM' || signal === 'SIGINT' ? 0 : 1);
   });
   setTimeout(() => {
     logger.error('Timeout de cierre — forzando salida.');
     process.exit(1);
   }, 10_000);
 }
+// Auditoría 2026-11-05 (P2-6): sin estos manejadores, una promesa rechazada sin catch
+// o una excepción no capturada tumbaban el proceso sin dejar el error en el log
+// estructurado. Se registra y se sale con cierre ordenado; Render vuelve a arrancarlo.
+let crashing = false;
+function fatal(kind, err) {
+  logger.error(`${kind} — el proceso se reiniciará`, { error: err?.message || String(err), stack: err?.stack });
+  if (crashing) return;
+  crashing = true;
+  shutdown(kind);
+}
+process.on('unhandledRejection', (reason) => fatal('unhandledRejection', reason));
+process.on('uncaughtException', (err) => fatal('uncaughtException', err));
+
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 

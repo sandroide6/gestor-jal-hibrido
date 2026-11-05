@@ -25,6 +25,7 @@ const sanitize           = require('./middleware/sanitize');
 const errorHandler       = require('./middleware/errorHandler');
 const requestId          = require('./middleware/requestId');
 const { register, metricsMiddleware } = require('./config/metrics');
+const { rateLimitKey } = require('./middleware/rateLimitKey');
 
 const app = express();
 
@@ -98,9 +99,28 @@ app.use(cors((req, cb) => {
   cb(Object.assign(new Error(`Origen no permitido por CORS: ${origin}`), { status: 403, code: 'FORBIDDEN' }));
 }));
 
+// cookieParser antes del límite: la clave por usuario sale de la cookie de sesión
+app.use(cookieParser());
+
+let proxyDiagnosticLogged = false;
+// Una sola vez por proceso: deja en el log lo necesario para comprobar TRUST_PROXY_HOPS
+// en producción (req.ip debe ser la IP del cliente, no la de Vercel ni la de Render).
+app.use((req, _res, next) => {
+  if (!proxyDiagnosticLogged && process.env.NODE_ENV === 'production' && req.headers['x-forwarded-for']) {
+    proxyDiagnosticLogged = true;
+    const hops = req.headers['x-forwarded-for'].split(',').length;
+    require('./config/logger').info('Diagnóstico de proxy', {
+      trust_proxy_hops: app.get('trust proxy'), saltos_x_forwarded_for: hops, req_ip: req.ip,
+    });
+  }
+  next();
+});
+
 app.use(rateLimit({
   windowMs: 60 * 1000,
-  max: 100,
+  // Por usuario (o por IP sin sesión). Ajustable sin tocar código.
+  max: Number(process.env.RATE_LIMIT_PER_MIN) || 300,
+  keyGenerator: rateLimitKey,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: true, message: 'Demasiadas solicitudes, intente de nuevo en un minuto.' },
@@ -108,7 +128,6 @@ app.use(rateLimit({
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
 app.use(sanitize);
 
 if (process.env.NODE_ENV !== 'test') {

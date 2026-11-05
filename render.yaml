@@ -13,7 +13,9 @@ services:
     dockerfilePath: ./deploy/render/Dockerfile.backend
     dockerContext: .
     plan: free
-    healthCheckPath: /health
+    # /health/live no toca la base: una caída de Supabase no debe provocar reinicios en
+    # bucle. La disponibilidad con base (/v1/health) la vigila el monitor externo.
+    healthCheckPath: /health/live
     envVars:
       - key: NODE_ENV
         value: production
