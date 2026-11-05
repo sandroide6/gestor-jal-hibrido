@@ -118,3 +118,64 @@ jobs:
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: deploy/render/prueba-imagen.sh gestor-render:ci
+
+  # Prueba de extremo a extremo en Chromium (auditoría 2026-11-05, fase 6): el
+  # administrador sembrado entra con la contraseña inicial, se le obliga a cambiarla,
+  # crea un Certificado de Residencia con la plantilla oficial y descarga el PDF.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gestor_jal_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gestor_jal_e2e
+      E2E_ADMIN_PASSWORD: Inicial-CI-E2E-2026!
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: LibreOffice (conversión DOCX → PDF)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer
+      - name: Backend
+        working-directory: backend
+        run: |
+          npm ci
+          npx sequelize-cli db:migrate
+          NODE_ENV=production ADMIN_INITIAL_PASSWORD="$E2E_ADMIN_PASSWORD" npx sequelize-cli db:seed:all
+          PORT=3001 NODE_ENV=development ALLOWED_ORIGINS=http://localhost:4173 nohup node src/index.js > ../backend-e2e.log 2>&1 &
+      - name: Frontend compilado
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          nohup npx vite preview --port 4173 --strictPort > ../preview-e2e.log 2>&1 &
+      - name: Navegador
+        working-directory: e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Esperar servicios
+        run: |
+          for i in $(seq 1 30); do curl -sf http://localhost:3001/health/live && curl -sf -o /dev/null http://localhost:4173/login && exit 0; sleep 2; done
+          cat backend-e2e.log preview-e2e.log; exit 1
+      - name: Flujo principal
+        working-directory: e2e
+        env:
+          E2E_CAPTURAS: ${{ github.workspace }}/e2e-capturas
+        run: node flujo-principal.mjs
+      - name: Capturas y registros
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-capturas
+          path: |
+            e2e-capturas
+            backend-e2e.log
+          retention-days: 7

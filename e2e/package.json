@@ -1,0 +1,11 @@
+{
+  "name": "gestor-jal-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "node flujo-principal.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

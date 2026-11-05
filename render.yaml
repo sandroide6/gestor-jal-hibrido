@@ -96,3 +96,11 @@ services:
         sync: false
       - key: GOOGLE_REDIRECT_URI
         sync: false
+
+      # ── Auditoría 2026-11-05: TLS verificado a Supabase y avisos ─────
+      # DB_SSL_CA: certificado de la CA de Supabase (panel › Database › SSL).
+      - key: DB_SSL_CA
+        sync: false
+      # ALERT_WEBHOOK_URL: ntfy.sh, Slack o Discord (opcional pero recomendado).
+      - key: ALERT_WEBHOOK_URL
+        sync: false
