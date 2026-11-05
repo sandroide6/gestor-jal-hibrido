@@ -56,6 +56,8 @@ COPY backend/migrations   ./migrations
 COPY backend/seeders      ./seeders
 COPY backend/plantillas   ./plantillas
 COPY backend/package.json ./package.json
+# sequelize-cli necesita .sequelizerc para encontrar config/database.js (migraciones al arrancar)
+COPY backend/.sequelizerc ./.sequelizerc
 COPY deploy/render/entrypoint.sh ./entrypoint.sh
 COPY deploy/render/tailscale-db-proxy.js ./tailscale-db-proxy.js
 RUN chmod +x ./entrypoint.sh

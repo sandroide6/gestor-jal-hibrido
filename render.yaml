@@ -21,6 +21,9 @@ services:
         value: production
       - key: PORT
         value: "3001"
+      # Aplica las migraciones pendientes al arrancar (ver deploy/render/entrypoint.sh)
+      - key: RUN_MIGRATIONS
+        value: "true"
 
       # ── Base de datos (Supabase) ────────────────────────────────────
       - key: DATABASE_URL

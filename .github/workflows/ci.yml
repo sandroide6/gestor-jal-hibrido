@@ -93,3 +93,28 @@ jobs:
         env:
           TARGET_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/verificacion
         run: deploy/backup/restaurar.sh respaldos/*.dump.gpg --confirmar
+
+  # Construye la imagen de Render y la prueba de verdad: migraciones al arrancar, seeder,
+  # cambio obligatorio de contraseña y un documento con PDF hecho por LibreOffice
+  # dentro de la imagen (auditoría 2026-11-05, P2-5).
+  imagen-render:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Construir la imagen de Render
+        run: docker build -f deploy/render/Dockerfile.backend -t gestor-render:ci .
+      - name: Prueba de humo de la imagen
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: deploy/render/prueba-imagen.sh gestor-render:ci
