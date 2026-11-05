@@ -5,9 +5,11 @@ import { generateDocument, getDownloadUrls, downloadDocument, cacheEdilSignature
 import { triggerBlobDownload } from '../services/clientDocumentGenerator';
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useEdiles } from '../hooks/useEdiles';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import DynamicForm from '../components/forms/DynamicForm';
 import AppLayout from '../components/ui/AppLayout';
 import EmptyState from '../components/ui/EmptyState';
+import { SkeletonCard } from '../components/ui/Skeleton';
 
 const STEPS = { SELECT: 'select', FORM: 'form', RESULT: 'result' };
 
@@ -19,6 +21,7 @@ export default function GeneratorPage() {
   const { data: allTypes, loading: loadingTypes, error: typeError } = useDocTypes(token);
   const docTypes = (allTypes ?? []).filter((t) => t.active);
   const { ediles } = useEdiles(isAuxiliar ? token : null);
+  const slowTypesMessage = useSlowLoadingMessage(loadingTypes);
 
   const [step, setStep] = useState(STEPS.SELECT);
   const [selectedType, setSelectedType] = useState(null);
@@ -139,7 +142,15 @@ export default function GeneratorPage() {
               Selecciona el tipo de documento
             </h2>
             {loadingTypes ? (
-              <p className="text-sm text-gray-400">Cargando tipos de documento…</p>
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <SkeletonCard rows={2} />
+                  <SkeletonCard rows={2} />
+                </div>
+                {slowTypesMessage && (
+                  <p className="text-center text-xs text-gray-400">{slowTypesMessage}</p>
+                )}
+              </div>
             ) : docTypes.length === 0 ? (
               <EmptyState message="No hay tipos de documento configurados para esta JAL." />
             ) : (

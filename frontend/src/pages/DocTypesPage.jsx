@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 import AppLayout from '../components/ui/AppLayout';
 import { fetchDocType, createDocType, updateDocType } from '../services/docTypesService';
 import { useDocTypes } from '../hooks/useDocTypes';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import { FIELD_TYPES, FIELD_TYPE_LABEL, TIPOS_TRAMITE, TIPO_TRAMITE_LABEL } from '../constants';
 import { SkeletonTable } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
@@ -457,6 +458,7 @@ ToggleActiveModal.propTypes = {
 export default function DocTypesPage() {
   const { token } = useAuthStore();
   const { data, loading, error: loadError } = useDocTypes(token);
+  const slowMessage = useSlowLoadingMessage(loading);
   const [docTypes, setDocTypes] = useState(null);
   const displayTypes = docTypes ?? data ?? [];
 
@@ -533,7 +535,10 @@ export default function DocTypesPage() {
           <tbody className="divide-y divide-gray-100">
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-4"><SkeletonTable rows={4} cols={5} /></td>
+                <td colSpan={5} className="px-4 py-4">
+                  <SkeletonTable rows={4} cols={5} />
+                  {slowMessage && <p className="text-center text-xs text-gray-400 mt-3">{slowMessage}</p>}
+                </td>
               </tr>
             )}
             {!loading && displayTypes.length === 0 && (

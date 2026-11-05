@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore';
 import AppLayout from '../components/ui/AppLayout';
 import { fetchAuditLogs } from '../services/adminService';
 import { useUsers } from '../hooks/useUsers';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import { formatDateTime } from '../utils/format';
 import { SkeletonTable } from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
@@ -119,6 +120,7 @@ export default function AuditLogsPage() {
   const [data, setData]       = useState({ rows: [], total: 0, pages: 1 });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+  const slowMessage = useSlowLoadingMessage(loading);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -205,7 +207,10 @@ export default function AuditLogsPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading && (
-                <tr><td colSpan={6} className="px-4 py-4"><SkeletonTable rows={5} cols={6} /></td></tr>
+                <tr><td colSpan={6} className="px-4 py-4">
+                  <SkeletonTable rows={5} cols={6} />
+                  {slowMessage && <p className="text-center text-xs text-gray-400 mt-3">{slowMessage}</p>}
+                </td></tr>
               )}
               {!loading && data.rows.length === 0 && (
                 <tr><EmptyState message="No hay registros para los filtros seleccionados." colSpan={6} /></tr>

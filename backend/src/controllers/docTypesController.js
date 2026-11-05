@@ -41,6 +41,10 @@ function validateTemplateVars(buffer, fieldNames) {
 async function list(req, res, next) {
   try {
     const types = await docTypes.listDocTypes(req.user.jal_id);
+    // Catálogo — cambia poco. Servir la copia en caché de inmediato mientras se revalida
+    // en segundo plano evita esperar al backend (ej. tras un cold start de Render).
+    // `private`: son tipos de documento de la JAL del usuario autenticado.
+    res.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
     res.json(types);
   } catch (err) { next(err); }
 }

@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '../components/ui/AppLayout';
 import { backupService } from '../services/backupService';
 import { useAuthStore } from '../stores/authStore';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
+import { SkeletonCard } from '../components/ui/Skeleton';
 
 const SCHEDULE_LABELS = { hourly: 'Cada hora', daily: 'Diario', weekly: 'Semanal' };
 const DAY_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -45,6 +47,7 @@ export default function BackupPage() {
   const [logs, setLogs]             = useState([]);
   const [localFiles, setLocalFiles] = useState([]);
   const [loading, setLoading]       = useState(true);
+  const slowMessage = useSlowLoadingMessage(loading);
   const [saving, setSaving]         = useState(false);
   const [running, setRunning]       = useState(false);
   const [openingFolder, setOpeningFolder] = useState(false);
@@ -138,8 +141,10 @@ export default function BackupPage() {
 
   if (loading) return (
     <AppLayout title="Backup · Google Drive">
-      <div className="flex justify-center items-center h-40">
-        <div className="animate-spin w-8 h-8 border-4 border-jal-blue-200 border-t-jal-blue-600 rounded-full" />
+      <div className="max-w-2xl space-y-4">
+        <SkeletonCard rows={3} />
+        <SkeletonCard rows={4} />
+        {slowMessage && <p className="text-center text-xs text-gray-400">{slowMessage}</p>}
       </div>
     </AppLayout>
   );

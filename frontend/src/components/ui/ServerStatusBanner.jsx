@@ -47,7 +47,9 @@ export default function ServerStatusBanner() {
     };
   }, [backendStatus, isOnline, setBackendStatus]);
 
-  if (backendStatus === 'ok' || !isOnline) return null;
+  // 'checking': la pantalla completa de arranque (AppBootScreen) ya cubre este caso —
+  // evita un banner vacío (MESSAGES no tiene entrada para 'checking').
+  if (backendStatus === 'ok' || backendStatus === 'checking' || !isOnline) return null;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50 bg-red-600 text-white text-center text-sm py-1.5 px-4 font-medium">

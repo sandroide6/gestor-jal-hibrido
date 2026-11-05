@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/authStore';
 import AppLayout from '../components/ui/AppLayout';
 import { getJalConfig, updateJalConfig } from '../services/jalConfigService';
 import { useAsync } from '../hooks/useAsync';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import { toast } from '../stores/toastStore';
 import { SkeletonCard } from '../components/ui/Skeleton';
 
@@ -18,6 +19,7 @@ const FEATURE_LABELS = {
 export default function JalConfigPage() {
   const { token } = useAuthStore();
   const { data: config, loading, error: loadError } = useAsync(() => getJalConfig(token), [token]);
+  const slowMessage = useSlowLoadingMessage(loading);
 
   const {
     register,
@@ -62,6 +64,7 @@ export default function JalConfigPage() {
         <div className="max-w-lg space-y-4">
           <SkeletonCard rows={3} />
           <SkeletonCard rows={5} />
+          {slowMessage && <p className="text-center text-xs text-gray-400">{slowMessage}</p>}
         </div>
       </AppLayout>
     );

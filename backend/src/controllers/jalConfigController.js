@@ -17,6 +17,11 @@ async function getConfig(req, res, next) {
     const jal = await Jal.findByPk(req.user.jal_id);
     if (!jal) return res.status(404).json({ error: true, message: 'JAL no encontrada' });
 
+    // Config de la JAL casi no cambia — el navegador puede servir la copia en caché de
+    // inmediato (evita esperar al backend, incluyendo un cold start de Render) mientras
+    // revalida en segundo plano. `private`: son datos de la JAL del usuario autenticado,
+    // no deben guardarse en caches compartidos (CDN/proxy).
+    res.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
     res.json({
       id:                 jal.id,
       name:               jal.name,

@@ -4,6 +4,13 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { api } from '../services/api';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
+
+const LOGIN_WAIT_MESSAGES = [
+  'Verificando…',
+  'Despertando el servidor (puede tardar hasta un minuto tras un período sin uso)…',
+  'Ya casi…',
+];
 
 const ROLE_REDIRECT = {
   administrador: '/admin',
@@ -29,6 +36,7 @@ export default function LoginPage() {
 
   const { login } = useAuthStore();
   const navigate  = useNavigate();
+  const loginWaitMessage = useSlowLoadingMessage(isSubmitting, { messages: LOGIN_WAIT_MESSAGES });
 
   async function onPasswordSubmit({ email, password }) {
     try {
@@ -125,7 +133,7 @@ export default function LoginPage() {
                 </div>
               )}
               <button type="submit" className="btn-primary w-full mt-2" disabled={isSubmitting}>
-                {isSubmitting ? <Spinner text="Verificando…" /> : 'Iniciar sesión'}
+                {isSubmitting ? <Spinner text={loginWaitMessage || 'Verificando…'} /> : 'Iniciar sesión'}
               </button>
             </form>
           ) : (

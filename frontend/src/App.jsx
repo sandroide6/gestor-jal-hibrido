@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/authStore';
 import RoleGuard from './components/ui/RoleGuard';
 import OfflineBanner from './components/ui/OfflineBanner';
 import ServerStatusBanner from './components/ui/ServerStatusBanner';
+import AppBootScreen from './components/ui/AppBootScreen';
 import UpdatePrompt from './components/ui/UpdatePrompt';
 import InstallPrompt from './components/ui/InstallPrompt';
 import ToastContainer from './components/ui/ToastContainer';
@@ -60,6 +61,7 @@ export default function App() {
 
   return (
     <>
+      <AppBootScreen />
       <OfflineBanner />
       <ServerStatusBanner />
       <UpdatePrompt />

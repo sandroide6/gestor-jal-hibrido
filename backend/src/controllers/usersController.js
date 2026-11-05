@@ -19,6 +19,10 @@ async function list(req, res, next) {
 async function listEdiles(req, res, next) {
   try {
     const ediles = await users.listEdiles(req.user.jal_id);
+    // Cambia poco (altas/bajas de ediles no son frecuentes) — servir la copia en caché
+    // de inmediato mientras se revalida en segundo plano evita esperar al backend.
+    // `private`: son datos de la JAL del usuario autenticado, no van a caches compartidos.
+    res.set('Cache-Control', 'private, max-age=60, stale-while-revalidate=300');
     res.json(ediles);
   } catch (err) { next(err); }
 }

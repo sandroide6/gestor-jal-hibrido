@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore';
 import AppLayout from '../components/ui/AppLayout';
 import { createUser, updateUser, deleteUser, hardDeleteUser } from '../services/usersService';
 import { useUsers } from '../hooks/useUsers';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import { ROLES, ROLE_LABEL } from '../constants';
 import { toast } from '../stores/toastStore';
 import { SkeletonTable } from '../components/ui/Skeleton';
@@ -132,6 +133,7 @@ ConfirmModal.propTypes = {
 export default function UsersPage() {
   const { token, user: me } = useAuthStore();
   const { data, loading, error, reload } = useUsers(token);
+  const slowMessage = useSlowLoadingMessage(loading);
   const [users, setUsers] = useState(null); // null = usar data del hook
   const [modal, setModal] = useState(null); // null | { type: 'create'|'edit', user? }
   const [confirm, setConfirm] = useState(null); // null | { message, action }
@@ -229,7 +231,10 @@ export default function UsersPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading && (
-              <tr><td colSpan={5} className="px-4 py-4"><SkeletonTable rows={5} cols={5} /></td></tr>
+              <tr><td colSpan={5} className="px-4 py-4">
+                <SkeletonTable rows={5} cols={5} />
+                {slowMessage && <p className="text-center text-xs text-gray-400 mt-3">{slowMessage}</p>}
+              </td></tr>
             )}
             {!loading && displayUsers.map(u => (
               <tr key={u.id} className={`hover:bg-gray-50 ${!u.active ? 'opacity-50' : ''}`}>

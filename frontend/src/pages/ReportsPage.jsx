@@ -11,7 +11,9 @@ import AppLayout from '../components/ui/AppLayout';
 import { fetchReportStats, downloadDocumentsReport } from '../services/reportsService';
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useUsers } from '../hooks/useUsers';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import { toast } from '../stores/toastStore';
+import { SkeletonCard } from '../components/ui/Skeleton';
 
 const PALETTE = ['#1e4d8c', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899', '#ef4444'];
 const EMPTY_FILTERS = { doc_type_id: '', user_id: '', date_from: '', date_to: '', reviewed: '' };
@@ -83,6 +85,7 @@ export default function ReportsPage() {
   const [stats, setStats]           = useState(null);
   const [loadingStats, setLoading]  = useState(true);
   const [loadingExcel, setExcel]    = useState(false);
+  const slowStatsMessage = useSlowLoadingMessage(loadingStats);
 
   const loadStats = useCallback(async (f) => {
     setLoading(true);
@@ -190,8 +193,15 @@ export default function ReportsPage() {
 
       {/* ── Loader ── */}
       {loadingStats && (
-        <div className="flex justify-center items-center h-52">
-          <div className="animate-spin w-9 h-9 border-4 border-jal-blue-200 border-t-jal-blue-600 rounded-full" />
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-4">
+            <SkeletonCard rows={2} />
+            <SkeletonCard rows={2} />
+            <SkeletonCard rows={2} />
+          </div>
+          {slowStatsMessage && (
+            <p className="text-center text-xs text-gray-400">{slowStatsMessage}</p>
+          )}
         </div>
       )}
 

@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore';
 import AppLayout from '../components/ui/AppLayout';
 import { downloadBackup, downloadExportData } from '../services/adminService';
 import { useAdminStats } from '../hooks/useAdminStats';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import { SYNC_LABEL, SYNC_CLASS } from '../constants';
 import { formatDate } from '../utils/format';
 import { SkeletonTable } from '../components/ui/Skeleton';
@@ -35,6 +36,7 @@ StatCard.propTypes = {
 export default function DashboardPage() {
   const { token } = useAuthStore();
   const { data: stats, loading, error } = useAdminStats(token);
+  const slowMessage = useSlowLoadingMessage(loading);
   const [backing, setBacking]       = useState(false);
   const [backupMsg, setBackupMsg]   = useState('');
   const [exporting, setExporting]   = useState(false);
@@ -105,6 +107,9 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+      {loading && slowMessage && (
+        <p className="text-center text-xs text-gray-400 -mt-4 mb-8">{slowMessage}</p>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
         {/* ── Documentos recientes ──────────────────────── */}

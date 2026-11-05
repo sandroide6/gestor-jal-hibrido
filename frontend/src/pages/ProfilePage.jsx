@@ -4,6 +4,7 @@ import AppLayout from '../components/ui/AppLayout';
 import { useAuthStore } from '../stores/authStore';
 import { getProfile, updateProfile, uploadFirma, deleteFirma } from '../services/profileService';
 import { api } from '../services/api';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import { ROLE_LABEL } from '../constants';
 import TwoFactorSection from '../components/ui/TwoFactorSection';
 import { formatDateLong } from '../utils/format';
@@ -13,6 +14,7 @@ export default function ProfilePage() {
   const { token, user, setToken, logout } = useAuthStore();
   const [profile, setProfile]   = useState(null);
   const [loading, setLoading]   = useState(true);
+  const slowMessage = useSlowLoadingMessage(loading);
   const [msg, setMsg]           = useState(null); // { type: 'ok'|'err', text }
   const [firmaUrl, setFirmaUrl] = useState(null);
   const [uploadingFirma, setUploadingFirma] = useState(false);
@@ -97,6 +99,7 @@ export default function ProfilePage() {
         <div className="max-w-2xl space-y-4">
           <SkeletonCard rows={4} />
           <SkeletonCard rows={3} />
+          {slowMessage && <p className="text-center text-xs text-gray-400">{slowMessage}</p>}
         </div>
       </AppLayout>
     );

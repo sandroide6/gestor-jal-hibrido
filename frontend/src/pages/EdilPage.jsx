@@ -6,8 +6,10 @@ import { fetchDocuments, markReviewed, fetchPendingCount } from '../services/edi
 import { downloadDocument, deleteDocument } from '../services/documentService';
 import { useDocTypes } from '../hooks/useDocTypes';
 import { useUsers } from '../hooks/useUsers';
+import { useSlowLoadingMessage } from '../hooks/useSlowLoadingMessage';
 import { formatDate } from '../utils/format';
 import EmptyState from '../components/ui/EmptyState';
+import { SkeletonTable } from '../components/ui/Skeleton';
 
 const EMPTY_FILTERS = {
   doc_type_name: '',
@@ -59,6 +61,7 @@ export default function EdilPage() {
   const [pendingCount, setPendingCount] = useState(0);
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, document_number, doc_type_name, beneficiary_name }
   const [deleting, setDeleting] = useState(false);
+  const slowMessage = useSlowLoadingMessage(loading);
 
   useEffect(() => {
     fetchPendingCount(token)
@@ -291,8 +294,11 @@ export default function EdilPage() {
             <tbody className="divide-y divide-gray-100">
               {loading && (
                 <tr>
-                  <td colSpan={9} className="px-3 py-8 text-center text-gray-400 text-sm">
-                    Cargando documentos…
+                  <td colSpan={9} className="px-3 py-4">
+                    <SkeletonTable rows={5} cols={9} />
+                    {slowMessage && (
+                      <p className="text-center text-xs text-gray-400 mt-3">{slowMessage}</p>
+                    )}
                   </td>
                 </tr>
               )}
