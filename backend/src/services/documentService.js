@@ -29,12 +29,46 @@ const CARGO_MAP = {
  * Crea un documento: valida tipo, campos, firma, genera archivos y persiste en BD.
  * Lanza errores con `.status` para que el errorHandler los serialice correctamente.
  */
-async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName, beneficiaryId, formFields, uploadedSignature, ip, edilId }) {
+// Busca un documento ya creado con el mismo identificador del cliente. Pertenecer a
+// otro usuario de la JAL con el mismo id solo puede ser un error o un intento de leer
+// un documento ajeno: se rechaza sin revelar nada.
+async function findByClientLocalId({ jalId, userId, clientLocalId }) {
+  if (!clientLocalId) return null;
+  const existing = await Document.findOne({
+    where: { jal_id: jalId, client_local_id: clientLocalId },
+    attributes: { exclude: ['file_docx', 'file_pdf'] },
+  });
+  if (existing && existing.user_id !== userId) {
+    throw Object.assign(new Error('Identificador de documento en uso'), { status: 409, code: E.CONFLICT });
+  }
+  return existing;
+}
+
+function isUniqueClientIdViolation(err) {
+  return err?.name === 'SequelizeUniqueConstraintError'
+    && JSON.stringify(err.fields || err.errors || '').includes('client_local_id');
+}
+
+/**
+ * Crea un documento: valida tipo, campos, firma, genera archivos y persiste en BD.
+ * Lanza errores con `.status` para que el errorHandler los serialice correctamente.
+ *
+ * `clientLocalId` (opcional) hace la operación idempotente: si ya existe un documento
+ * con ese identificador en la JAL, se devuelve ese documento con `duplicate: true` en
+ * vez de crear otro con otro radicado. Lo usan la ruta en línea (reintentos) y la
+ * sincronización sin conexión, que desde la auditoría 2026-11-05 pasa por aquí.
+ */
+async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName, beneficiaryId, formFields, uploadedSignature, ip, edilId, clientLocalId = null }) {
+  const previous = await findByClientLocalId({ jalId, userId, clientLocalId });
+  if (previous) {
+    return { doc: previous, docType: { id: previous.doc_type_id, name: previous.doc_type_name }, duplicate: true };
+  }
+
   const docType = await DocType.findOne({
     where: { id: docTypeId, jal_id: jalId, active: true },
   });
   if (!docType) {
-    throw Object.assign(new Error('Tipo de documento no encontrado o inactivo'), { status: 404 });
+    throw Object.assign(new Error('Tipo de documento no encontrado o inactivo'), { status: 404, code: 'DOC_TYPE_NOT_FOUND' });
   }
 
   const missingFields = (docType.fields || [])
@@ -141,6 +175,7 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
   // se revierte completa y el consecutivo reclamado queda libre para el siguiente intento
   // (sin huecos ni duplicados). Como contrapartida, dos generaciones concurrentes del mismo
   // jal_id + año + tipo_tramite se serializan mientras dure la generación de archivos.
+  try {
   await Document.sequelize.transaction(async (t) => {
     numeroRadicado = await radicadoService.assignNumeroRadicado({
       jalId,
@@ -189,8 +224,18 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       document_number: documentNumber,
       numero_radicado: numeroRadicado,
       tipo_tramite: docType.tipo_tramite,
+      client_local_id: clientLocalId || null,
     }, { transaction: t });
   });
+  } catch (err) {
+    // Dos envíos simultáneos con el mismo identificador: el segundo choca con el índice
+    // único, su transacción se revierte (el radicado queda libre) y devuelve el primero.
+    if (clientLocalId && isUniqueClientIdViolation(err)) {
+      const winner = await findByClientLocalId({ jalId, userId, clientLocalId });
+      if (winner) return { doc: winner, docType: { id: winner.doc_type_id, name: winner.doc_type_name }, duplicate: true };
+    }
+    throw err;
+  }
 
   // Fire-and-forget: si la JAL tiene Drive conectado, sube el DOCX/PDF ya generado.
   // No se espera (`await`) ni se propaga su error — no debe retrasar ni tumbar la
@@ -223,7 +268,7 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
     metadata: { doc_type: docType.name, beneficiary_id: beneficiaryId, numero_radicado: numeroRadicado },
   });
 
-  return { doc, docType };
+  return { doc, docType, duplicate: false };
 }
 
 // ── Queries de lectura ────────────────────────────────────

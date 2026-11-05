@@ -8,7 +8,7 @@ const batch = Joi.object({
         operation: Joi.string().valid('create', 'update', 'delete').required(),
         payload: Joi.object({
           resource: Joi.string().required(),
-          localId:  Joi.string().required(),
+          localId:  Joi.string().max(64).pattern(/^[A-Za-z0-9_-]+$/).required(),
           // Acepta 'data' (nuevo) o 'payload' (legacy) — al menos uno requerido
           data:    Joi.object().unknown(true).optional(),
           payload: Joi.object().unknown(true).optional(),

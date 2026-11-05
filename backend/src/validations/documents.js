@@ -8,6 +8,8 @@ const create = Joi.object({
   beneficiary_name: Joi.string().max(300).allow('', null).optional(),
   beneficiary_id:   Joi.string().max(20).allow('', null).optional(),
   edil_id:          Joi.string().uuid().optional().allow(null, ''),
+  // Idempotencia: identificador que genera el cliente (ver migración 0027)
+  client_local_id:  Joi.string().max(64).pattern(/^[A-Za-z0-9_-]+$/).optional().allow(null, ''),
 }).unknown(true);
 
 const ownList = Joi.object({

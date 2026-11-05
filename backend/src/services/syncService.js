@@ -1,138 +1,80 @@
 'use strict';
-const { v4: uuidv4 } = require('uuid');
-const { Document, DocType, Jal, User } = require('../models');
-// Ver el mismo comentario en documentService.js — diferido para no pagar el costo de
-// requerir docx/pdf-lib/docxtemplater/mammoth/pizzip en cada arranque del proceso.
-function getDocumentGeneratorService() {
-  return require('./documentGeneratorService');
-}
-const radicadoService = require('./radicadoService');
-const documentNumberService = require('./documentNumberService');
+// Sincronización de documentos creados sin conexión.
+//
+// Desde la auditoría de producción 2026-11-05 (P0-2) esta ruta ya no genera el
+// documento por su cuenta: delega en documentService.createDocument, la misma función
+// que usa la ruta en línea. Antes eran dos implementaciones separadas y la de aquí:
+//   - no guardaba file_docx/file_pdf en la base (solo en el disco efímero de Render),
+//   - no añadía firma, encargado ni cargo, así que las plantillas oficiales fallaban,
+//   - creaba un documento nuevo (y otro radicado) en cada reenvío del mismo localId.
+// Ahora el localId del cliente se guarda como client_local_id y hace idempotente el envío.
+const documentService = require('./documentService');
 const audit = require('./auditService');
 const notify = require('./notificationService');
 
 // Procesa una operación 'create' de documento offline
-async function processDocumentCreate({ localId, data, userId, jalId, ip }) {
+async function processDocumentCreate({ localId, data, userId, jalId, role, ip }) {
   const { doc_type_id, beneficiary_name, beneficiary_id, edil_id, ...formFields } = data;
+  // El identificador válido es el localId de la operación, no uno dentro de data
+  delete formFields.client_local_id;
 
-  const docType = await DocType.findOne({ where: { id: doc_type_id, jal_id: jalId, active: true } });
-  if (!docType) {
-    throw Object.assign(new Error('Tipo de documento no encontrado o inactivo'), { code: 'DOC_TYPE_NOT_FOUND' });
-  }
-
-  const jal = await Jal.findByPk(jalId);
-
-  // IDOR: edil_id viene del payload que el cliente sincroniza — sin validar que
-  // pertenezca a esta JAL, se podía atribuir el documento (y notificar) a un edil
-  // de otra JAL (mismo hallazgo que en documentService.createDocument).
-  if (edil_id) {
-    const edil = await User.findOne({ where: { id: edil_id, jal_id: jalId, role: 'edil', active: true } });
-    if (!edil) {
-      throw Object.assign(new Error('El edil seleccionado no existe o no pertenece a esta JAL'), { code: 'INVALID_EDIL' });
-    }
-  }
-
-  // Campos requeridos
-  const missing = (docType.fields || [])
-    .filter((f) => f.required && !formFields[f.name] && formFields[f.name] !== 0)
-    .map((f) => f.label);
-  if (missing.length) {
-    throw Object.assign(new Error(`Campos requeridos faltantes: ${missing.join(', ')}`), { code: 'MISSING_FIELDS' });
-  }
-
-  const templateData = {
-    beneficiary_name,
-    beneficiary_id,
-    ...formFields,
-    jal_name: jal.name,
-    doc_type_name: docType.name,
-    fecha_expedicion: new Date().toLocaleDateString('es-CO', {
-      day: 'numeric', month: 'long', year: 'numeric',
-    }),
-  };
-
-  const serverId = uuidv4();
-  let numeroRadicado;
-
-  // Mismo criterio que documentService.createDocument: radicado + generación de archivos +
-  // INSERT dentro de una sola transacción, para que un fallo revierta también el consecutivo.
-  await Document.sequelize.transaction(async (t) => {
-    numeroRadicado = await radicadoService.assignNumeroRadicado({
-      jalId,
-      tipoTramite: docType.tipo_tramite,
-      transaction: t,
-    });
-    templateData.numero_radicado = numeroRadicado;
-
-    const { docxPath, pdfPath } = await getDocumentGeneratorService().generateDocuments({
-      jalId,
-      jalName: jal.name,
-      docType: { id: docType.id, name: docType.name, fields: docType.fields, template_path: docType.template_path, template_data: docType.template_data },
-      data: templateData,
-    });
-
-    // Fix: esta ruta (sync offline→online) nunca asignaba document_number, a
-    // diferencia de documentService.createDocument — los documentos sincronizados
-    // quedaban con ese campo en NULL para siempre.
-    const documentNumber = await documentNumberService.assignDocumentNumber({ jalId, transaction: t });
-
-    await Document.create({
-      id: serverId,
-      jal_id: jalId,
-      user_id: userId,
-      edil_id: edil_id || null,
-      doc_type_id: docType.id,
-      doc_type_name: docType.name,
-      beneficiary_name,
-      beneficiary_id,
-      metadata: templateData,
-      file_path_docx: docxPath,
-      file_path_pdf: pdfPath,
-      sync_status: 'synced',
-      document_number: documentNumber,
-      numero_radicado: numeroRadicado,
-      tipo_tramite: docType.tipo_tramite,
-    }, { transaction: t });
-  });
-
-  await audit.log({
+  const { doc, docType, duplicate } = await documentService.createDocument({
+    jalId,
     userId,
-    action: 'document.sync_create',
-    resource: `documents/${serverId}`,
-    result: 'success',
+    role,
+    docTypeId: doc_type_id,
+    beneficiaryName: beneficiary_name,
+    beneficiaryId: beneficiary_id,
+    formFields,
+    uploadedSignature: null,
     ip,
-    metadata: { localId, doc_type: docType.name, beneficiary_id, numero_radicado: numeroRadicado },
+    edilId: edil_id || null,
+    clientLocalId: localId,
   });
 
-  await notify.notify({
-    userId,
-    type: 'document.synced',
-    message: `Tu documento "${docType.name}" para ${beneficiary_name} fue sincronizado correctamente.`,
-    metadata: { document_id: serverId, doc_type_name: docType.name, local_id: localId },
-  });
-
-  if (edil_id) {
-    await notify.notify({
-      userId: edil_id,
-      type: 'document.pending_review',
-      message: `Se sincronizó un documento "${docType.name}" generado a tu nombre para ${beneficiary_name}. Revísalo.`,
-      metadata: { document_id: serverId, doc_type_name: docType.name },
+  if (!duplicate) {
+    await audit.log({
+      userId,
+      action: 'document.sync_create',
+      resource: `documents/${doc.id}`,
+      result: 'success',
+      ip,
+      metadata: { localId, doc_type: docType.name, beneficiary_id, numero_radicado: doc.numero_radicado },
     });
+
+    await notify.notify({
+      userId,
+      type: 'document.synced',
+      message: `Tu documento "${docType.name}" para ${beneficiary_name} fue sincronizado correctamente.`,
+      metadata: { document_id: doc.id, doc_type_name: docType.name, local_id: localId },
+    });
+
+    if (edil_id) {
+      await notify.notify({
+        userId: edil_id,
+        type: 'document.pending_review',
+        message: `Se sincronizó un documento "${docType.name}" generado a tu nombre para ${beneficiary_name}. Revísalo.`,
+        metadata: { document_id: doc.id, doc_type_name: docType.name },
+      });
+    }
   }
 
   return {
     localId,
     status: 'success',
-    serverId,
+    duplicate: !!duplicate,
+    serverId: doc.id,
+    numero_radicado: doc.numero_radicado,
+    document_number: doc.document_number,
     download: {
-      docx: `/documents/${serverId}/download?format=docx`,
-      pdf: `/documents/${serverId}/download?format=pdf`,
+      docx: `/documents/${doc.id}/download?format=docx`,
+      pdf: `/documents/${doc.id}/download?format=pdf`,
     },
   };
 }
 
 // Procesa un lote de operaciones offline enviadas por el cliente
-async function processBatch({ operations, userId, jalId, ip }) {
+async function processBatch({ operations, userId, jalId, role, ip }) {
   const results = [];
 
   for (const op of operations) {
@@ -143,6 +85,7 @@ async function processBatch({ operations, userId, jalId, ip }) {
           data: op.payload.data || op.payload.payload, // acepta legacy 'payload' key
           userId,
           jalId,
+          role,
           ip,
         });
         results.push(result);
@@ -165,6 +108,7 @@ async function processBatch({ operations, userId, jalId, ip }) {
       results.push({
         localId: op.payload?.localId,
         status: err.code === 'DOC_TYPE_NOT_FOUND' ? 'conflict' : 'error',
+        code: err.code,
         message: err.message,
       });
     }

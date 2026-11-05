@@ -22,7 +22,6 @@ export default defineConfig({
       exclude: [
         'src/index.js',
         'src/swagger.js',
-        'src/services/syncService.js',
       ],
       // NUNCA bajar estos valores — si CI falla, agregar tests, no bajar el umbral.
       thresholds: {

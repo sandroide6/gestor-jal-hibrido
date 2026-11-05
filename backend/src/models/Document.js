@@ -15,6 +15,12 @@ module.exports = (sequelize) =>
         type: DataTypes.STRING(20),
         allowNull: true,
       },
+      // Identificador que genera el cliente antes de enviar; hace idempotente la
+      // creación (reintentos en línea y cola sin conexión). Ver migración 0027.
+      client_local_id: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
       numero_radicado: {
         type: DataTypes.STRING(30),
         allowNull: false,
