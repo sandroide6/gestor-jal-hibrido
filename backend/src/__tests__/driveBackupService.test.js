@@ -179,6 +179,7 @@ describe('checkAutoBackups()', () => {
       id: 'jal-1',
       config: { drive_backup: {
         auto_enabled: true, tokens: 'x', auto_running: true,
+        auto_running_since: new Date(Date.now() - 60 * 1000).toISOString(), // en curso hace 1 min
         next_backup_at: new Date(Date.now() - 1000).toISOString(), // vencido
       } },
     }]);
@@ -188,6 +189,32 @@ describe('checkAutoBackups()', () => {
 
     // No debió intentar marcar auto_running (ya lo tenía) ni tocar la JAL en absoluto
     expect(updateSpy).not.toHaveBeenCalled();
+  });
+
+  // Auditoría 2026-11-05 (P0-1): si el proceso se reiniciaba a mitad de un backup (normal
+  // en Render), auto_running quedaba en true para siempre y esa JAL no volvía a hacer
+  // copias automáticas. Ahora la marca caduca.
+  it.each([
+    ['marca antigua sin fecha (backup interrumpido antes de este cambio)', undefined],
+    ['marca de hace 3 horas (proceso reiniciado a mitad)', new Date(Date.now() - 3 * 3600 * 1000).toISOString()],
+  ])('vuelve a lanzar el backup si la marca auto_running quedó colgada: %s', async (_caso, since) => {
+    vi.spyOn(models.Jal, 'findAll').mockResolvedValue([{
+      id: 'jal-1',
+      config: { drive_backup: {
+        auto_enabled: true, tokens: 'x', auto_running: true,
+        ...(since ? { auto_running_since: since } : {}),
+        next_backup_at: new Date(Date.now() - 1000).toISOString(),
+      } },
+    }]);
+    vi.spyOn(models.Jal, 'findByPk').mockResolvedValue(null);
+    const updateSpy = vi.spyOn(models.Jal, 'update').mockResolvedValue([1]);
+
+    await checkAutoBackups();
+
+    expect(updateSpy).toHaveBeenCalled();
+    const marked = updateSpy.mock.calls[0][0].config.drive_backup;
+    expect(marked.auto_running).toBe(true);
+    expect(new Date(marked.auto_running_since).getTime()).toBeGreaterThan(Date.now() - 5000);
   });
 
   it('marca auto_running=true antes de lanzar el backup, y lo limpia al terminar (éxito o fallo)', async () => {

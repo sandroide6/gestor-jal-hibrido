@@ -445,6 +445,14 @@ function calcNextBackup(schedule, hour = 2, day = 1) {
   return next;
 }
 
+// Un backup normal tarda segundos o pocos minutos; 2 horas es holgado
+const AUTO_RUNNING_TTL_MS = 2 * 60 * 60 * 1000;
+
+function isStaleAutoRunning(cfg, now = new Date()) {
+  if (!cfg.auto_running_since) return true;
+  return now - new Date(cfg.auto_running_since) > AUTO_RUNNING_TTL_MS;
+}
+
 // Limpia el flag `auto_running` de una JAL al terminar el backup automático
 // (éxito o fallo), releyendo la config fresca para no pisar cambios concurrentes.
 async function clearAutoRunning(jalId) {
@@ -453,6 +461,7 @@ async function clearAutoRunning(jalId) {
     const cfg = { ...(fresh?.config?.drive_backup || {}) };
     if (!('auto_running' in cfg)) return;
     delete cfg.auto_running;
+    delete cfg.auto_running_since;
     await Jal.update({ config: { ...fresh.config, drive_backup: cfg } }, { where: { id: jalId } });
   } catch (err) {
     logger.error('checkAutoBackups: no se pudo limpiar auto_running', { jalId, error: err.message });
@@ -471,10 +480,15 @@ async function checkAutoBackups() {
       // dispare el mismo backup dos veces en paralelo para la misma JAL (next_backup_at
       // solo se recalcula al terminar, así que sin este flag varios ticks sucesivos
       // seguían viéndolo vencido mientras el primero aún corría).
-      if (cfg.auto_running) continue;
+      //
+      // La marca caduca (auditoría 2026-11-05, P0-1): si el proceso se reinicia a mitad de
+      // un backup —normal en Render— nadie la limpiaba y esa JAL no volvía a hacer copias
+      // automáticas nunca más. Una marca sin fecha (de antes de este cambio) o más vieja
+      // que AUTO_RUNNING_TTL_MS se considera colgada.
+      if (cfg.auto_running && !isStaleAutoRunning(cfg, now)) continue;
       if (new Date(cfg.next_backup_at) <= now) {
         await Jal.update(
-          { config: { ...jal.config, drive_backup: { ...cfg, auto_running: true } } },
+          { config: { ...jal.config, drive_backup: { ...cfg, auto_running: true, auto_running_since: now.toISOString() } } },
           { where: { id: jal.id } },
         );
 
