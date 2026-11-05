@@ -2,9 +2,28 @@ require('dotenv').config();
 
 // Backend usa PostgreSQL en todos los entornos.
 // El almacenamiento offline del cliente corre en IndexedDB (browser), no en SQLite aquí.
+const fs = require('fs');
+
+// TLS hacia la base (auditoría 2026-11-05, P2-1). Antes siempre era
+// rejectUnauthorized:false: cifrado pero sin comprobar QUIÉN responde, lo que permite
+// un intermediario. Ahora:
+//   DB_SSL_CA=<PEM o ruta a .crt>  → verifica contra esa CA (Supabase: "SSL certificate"
+//                                    en Project Settings → Database). Recomendado.
+//   DB_SSL_VERIFY=true             → verifica contra las CA del sistema.
+//   ninguna                        → como antes, sin verificar (con aviso al arrancar).
+function sslConfig() {
+  const ca = process.env.DB_SSL_CA;
+  if (ca) {
+    const pem = ca.includes('BEGIN CERTIFICATE') ? ca.replace(/\\n/g, '\n') : fs.readFileSync(ca, 'utf8');
+    return { require: true, rejectUnauthorized: true, ca: pem };
+  }
+  if (process.env.DB_SSL_VERIFY === 'true') return { require: true, rejectUnauthorized: true };
+  return { require: true, rejectUnauthorized: false };
+}
+
 const sslOpts = {
-  dialectOptions: {
-    ssl: { require: true, rejectUnauthorized: false },
+  get dialectOptions() {
+    return { ssl: sslConfig() };
   },
 };
 
@@ -29,6 +48,7 @@ function needsSsl(url) {
 }
 
 module.exports = {
+  sslConfig,
   development: {
     url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/gestor_jal',
     dialect: 'postgres',

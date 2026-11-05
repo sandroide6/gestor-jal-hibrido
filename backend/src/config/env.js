@@ -26,6 +26,14 @@ function validateEnv() {
       .filter(([k, defaultVal]) => !process.env[k] || process.env[k] === defaultVal)
       .map(([k]) => k);
 
+    // Auditoría 2026-11-05 (P2-1): avisar si la conexión TLS a la base no verifica el certificado
+    if (process.env.DB_SSL !== 'false' && !process.env.DB_SSL_CA && process.env.DB_SSL_VERIFY !== 'true') {
+      console.warn(JSON.stringify({
+        level: 'warn', timestamp: new Date().toISOString(),
+        message: 'TLS a la base sin verificar el certificado: define DB_SSL_CA (CA de Supabase) o DB_SSL_VERIFY=true',
+      }));
+    }
+
     if (insecure.length) {
       console.error(JSON.stringify({
         level: 'error', timestamp: new Date().toISOString(),
