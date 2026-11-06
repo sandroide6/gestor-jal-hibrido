@@ -105,6 +105,16 @@ async function download(req, res, next) {
       return res.send(fileBytes);
     }
 
+    // El PDF se genera después de guardar el documento (P2-2); si esa conversión falló,
+    // se genera ahora desde el DOCX guardado y se deja en la base para la próxima vez.
+    if (format === 'pdf' && doc.file_docx) {
+      const pdf = await require('../services/documentGeneratorService').docxBufferToPdf(doc.file_docx);
+      await doc.update({ file_pdf: pdf });
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="documento_${doc.id.slice(0, 8)}.pdf"`);
+      return res.send(pdf);
+    }
+
     return res.status(404).json({ error: true, message: `Archivo ${format.toUpperCase()} no disponible` });
   } catch (err) {
     next(err);

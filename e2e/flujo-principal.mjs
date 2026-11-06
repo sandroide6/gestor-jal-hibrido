@@ -5,7 +5,8 @@
 //   2. acepta la política de datos y se le OBLIGA a cambiar la contraseña,
 //   3. crea un Certificado de Residencia (plantilla oficial → PDF con LibreOffice),
 //   4. descarga el PDF y se comprueba que es un PDF de verdad,
-//   5. vuelve a entrar con la contraseña nueva (la inicial ya no sirve).
+//   5. revisa Mi perfil (firma) y Reportes (cifras),
+//   6. vuelve a entrar con la contraseña nueva (la inicial ya no sirve).
 //
 // Uso: E2E_BASE_URL=http://localhost:4173 E2E_ADMIN_PASSWORD=... node e2e/flujo-principal.mjs
 // Variables opcionales: E2E_CAPTURAS=<carpeta> guarda una captura por paso.
@@ -112,6 +113,13 @@ try {
   const bytes = fs.statSync(destino).size;
   if (cabecera !== '%PDF-' || bytes < 10000) throw new Error(`descarga no es un PDF válido (${cabecera}, ${bytes} bytes)`);
   await ok(page, `PDF descargado (${bytes} bytes, cabecera ${cabecera})`);
+
+  // Mi perfil muestra la firma subida y Reportes cuenta el documento creado
+  await page.goto(`${BASE}/perfil`);
+  await page.getByAltText('Tu firma guardada').waitFor();
+  await page.goto(`${BASE}/reportes`);
+  await page.getByText('Estado de revisión').waitFor();
+  await ok(page, 'Mi perfil muestra la firma y Reportes muestra las cifras del documento');
 
   // 5. Salir y comprobar credenciales
   await context.clearCookies();

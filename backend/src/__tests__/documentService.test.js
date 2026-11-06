@@ -41,7 +41,7 @@ const MOCK_JAL  = { id: 'jal-1', name: 'JAL Comuna 12' };
 // Firma por defecto para la ruta feliz — los tests de resolución de firma
 // (líneas más abajo) la sobreescriben explícitamente a null para probar cada rama.
 const MOCK_USER = { name: 'María Gómez', cargo_titulo: null, signature_path: '/data/sigs/default.png', signature_data: null };
-const MOCK_GEN  = { docxPath: '/tmp/out.docx', pdfPath: '/tmp/out.pdf' };
+const MOCK_GEN  = { docxPath: '/tmp/out.docx', pdfPath: '/tmp/out.pdf', docxBuffer: Buffer.from('docx'), pdfJob: {} };
 const MOCK_DOC  = { id: 'doc-uuid-1', jal_id: 'jal-1' };
 
 // Referencia a los mocks de User.unscoped().findByPk / .findOne (firmante / edil)
@@ -52,8 +52,9 @@ function setupHappyPath(overrides = {}) {
   models.DocType.findOne.mockResolvedValue({ ...MOCK_DOC_TYPE, ...overrides.docType });
   models.Jal.findByPk.mockResolvedValue({ ...MOCK_JAL, ...overrides.jal });
   mockUserFindByPk.mockResolvedValue({ ...MOCK_USER, ...overrides.user });
-  docGenerator.generateDocuments.mockResolvedValue({ ...MOCK_GEN, ...overrides.gen });
-  models.Document.create.mockResolvedValue({ ...MOCK_DOC, ...overrides.doc });
+  docGenerator.generateDocx.mockResolvedValue({ ...MOCK_GEN, ...overrides.gen });
+  docGenerator.generatePdfFor.mockResolvedValue(Buffer.from('%PDF-'));
+  models.Document.create.mockResolvedValue({ ...MOCK_DOC, update: vi.fn().mockResolvedValue(undefined), ...overrides.doc });
   radicadoService.assignNumeroRadicado.mockResolvedValue('2026-JAL-SAL-000001');
   audit.log.mockResolvedValue(undefined);
 }
@@ -63,7 +64,8 @@ beforeEach(() => {
   vi.spyOn(models.Document, 'create');
   vi.spyOn(models.Jal,      'findByPk');
   vi.spyOn(models.User,     'unscoped').mockReturnValue({ findByPk: mockUserFindByPk, findOne: mockEdilFindOne });
-  vi.spyOn(docGenerator,    'generateDocuments');
+  vi.spyOn(docGenerator,    'generateDocx');
+  vi.spyOn(docGenerator,    'generatePdfFor');
   vi.spyOn(audit,           'log');
   // assignNumeroRadicado hace un INSERT real (ON CONFLICT) contra `radicado_counters` —
   // se mockea para que este test siga siendo un test unitario de createDocument y no
@@ -98,12 +100,12 @@ describe('createDocument — PT-09', () => {
     expect(audit.log).toHaveBeenCalledOnce();
   });
 
-  it('llama a generateDocuments con los datos de plantilla correctos', async () => {
+  it('llama a generateDocx con los datos de plantilla correctos', async () => {
     setupHappyPath();
 
     await createDocument(BASE_INPUT);
 
-    const callArg = docGenerator.generateDocuments.mock.calls[0][0];
+    const callArg = docGenerator.generateDocx.mock.calls[0][0];
     expect(callArg.jalId).toBe('jal-1');
     expect(callArg.data.beneficiary_name).toBe('Juan Pérez');
     expect(callArg.data.beneficiary_id).toBe('1234567890');
@@ -153,7 +155,7 @@ describe('createDocument — PT-09', () => {
 
     await createDocument({ ...BASE_INPUT, edilId: 'edil-1' });
 
-    const callArg = docGenerator.generateDocuments.mock.calls[0][0];
+    const callArg = docGenerator.generateDocx.mock.calls[0][0];
     expect(callArg.data.nombre_encargado).toBe('Edil Legítimo');
     expect(callArg.signaturePath).toBe('/data/sigs/edil.png');
   });
@@ -258,7 +260,7 @@ describe('createDocument — PT-09', () => {
       uploadedSignature: { path: '/tmp/upload.png', mimetype: 'image/png', size: 5000 },
     });
 
-    const callArg = docGenerator.generateDocuments.mock.calls[0][0];
+    const callArg = docGenerator.generateDocx.mock.calls[0][0];
     expect(callArg.signaturePath).toBe('/tmp/upload.png');
     expect(callArg.signatureBuffer).toBeNull();
   });
@@ -273,7 +275,7 @@ describe('createDocument — PT-09', () => {
 
     await createDocument(BASE_INPUT);
 
-    const callArg = docGenerator.generateDocuments.mock.calls[0][0];
+    const callArg = docGenerator.generateDocx.mock.calls[0][0];
     expect(callArg.signatureBuffer).toBeInstanceOf(Buffer);
     expect(callArg.signatureMime).toBe('image/png');
     expect(callArg.signaturePath).toBeNull();
@@ -288,7 +290,7 @@ describe('createDocument — PT-09', () => {
 
     await createDocument(BASE_INPUT);
 
-    const callArg = docGenerator.generateDocuments.mock.calls[0][0];
+    const callArg = docGenerator.generateDocx.mock.calls[0][0];
     expect(callArg.signaturePath).toBe('/data/sigs/u1.png');
     expect(callArg.signatureBuffer).toBeNull();
   });
@@ -300,7 +302,7 @@ describe('createDocument — PT-09', () => {
 
     await createDocument(BASE_INPUT);
 
-    const callArg = docGenerator.generateDocuments.mock.calls[0][0];
+    const callArg = docGenerator.generateDocx.mock.calls[0][0];
     expect(callArg.data.cargo).toBe('Secretario Ejecutivo');
   });
 
@@ -309,22 +311,41 @@ describe('createDocument — PT-09', () => {
 
     await createDocument({ ...BASE_INPUT, role: 'edil' });
 
-    const callArg = docGenerator.generateDocuments.mock.calls[0][0];
+    const callArg = docGenerator.generateDocx.mock.calls[0][0];
     expect(callArg.data.cargo).toBe('Edil(a)');
   });
 
   // ── Fallo en generación no persiste en BD ─────────────────────────────────
 
-  it('no llama a Document.create si generateDocuments falla', async () => {
+  it('no llama a Document.create si falla el armado del DOCX', async () => {
     models.DocType.findOne.mockResolvedValue(MOCK_DOC_TYPE);
     models.Jal.findByPk.mockResolvedValue(MOCK_JAL);
     mockUserFindByPk.mockResolvedValue(MOCK_USER);
     radicadoService.assignNumeroRadicado.mockResolvedValue('2026-JAL-SAL-000001');
-    docGenerator.generateDocuments.mockRejectedValue(new Error('LibreOffice falló'));
+    docGenerator.generateDocx.mockRejectedValue(new Error('plantilla rota'));
 
-    await expect(createDocument(BASE_INPUT)).rejects.toThrow('LibreOffice falló');
+    await expect(createDocument(BASE_INPUT)).rejects.toThrow('plantilla rota');
     expect(models.Document.create).not.toHaveBeenCalled();
     expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  // P2-2: el PDF se genera después de guardar; si falla, el documento (y su radicado)
+  // se conservan y el PDF se generará al descargar.
+  it('si falla la conversión a PDF, el documento se conserva sin PDF', async () => {
+    setupHappyPath();
+    docGenerator.generatePdfFor.mockRejectedValue(new Error('LibreOffice falló'));
+
+    const result = await createDocument(BASE_INPUT);
+    expect(models.Document.create).toHaveBeenCalledOnce();
+    expect(models.Document.create.mock.calls[0][0]).toMatchObject({ file_pdf: null, file_path_pdf: null });
+    expect(result.doc.update).not.toHaveBeenCalled();
+    expect(audit.log).toHaveBeenCalledOnce();
+  });
+
+  it('guarda el PDF en el documento después de la transacción', async () => {
+    setupHappyPath();
+    const result = await createDocument(BASE_INPUT);
+    expect(result.doc.update).toHaveBeenCalledWith({ file_pdf: expect.any(Buffer), file_path_pdf: '/tmp/out.pdf' });
   });
 });
 

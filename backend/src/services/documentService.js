@@ -1,5 +1,6 @@
 'use strict';
 const { v4: uuidv4 } = require('uuid');
+const errorTracking = require('./errorTracking');
 const { Op } = require('sequelize');
 const { DocType, Document, Jal, User } = require('../models');
 const E = require('../config/errorCodes');
@@ -170,11 +171,14 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
   let docxBuffer;
   let pdfBuffer;
 
-  // El radicado se reclama, el archivo se genera y el documento se inserta dentro de la
-  // MISMA transacción: si la generación del DOCX/PDF o el INSERT fallan, la transacción
-  // se revierte completa y el consecutivo reclamado queda libre para el siguiente intento
-  // (sin huecos ni duplicados). Como contrapartida, dos generaciones concurrentes del mismo
-  // jal_id + año + tipo_tramite se serializan mientras dure la generación de archivos.
+  // El radicado se reclama, el DOCX se arma y el documento se inserta dentro de la MISMA
+  // transacción: si algo falla, se revierte completa y el consecutivo queda libre para el
+  // siguiente intento (sin huecos ni duplicados). El PDF (LibreOffice, segundos) se genera
+  // DESPUÉS de confirmar (auditoría 2026-11-05, P2-2): antes se hacía dentro y el contador
+  // del mismo jal_id + año + tipo_tramite quedaba bloqueado durante toda la conversión.
+  // Si la conversión fallara, el documento ya existe con su DOCX y la descarga del PDF lo
+  // genera en ese momento (documentController.download).
+  let prepared;
   try {
   await Document.sequelize.transaction(async (t) => {
     numeroRadicado = await radicadoService.assignNumeroRadicado({
@@ -184,8 +188,7 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
     });
     templateData.numero_radicado = numeroRadicado;
 
-    let docxPath, pdfPath;
-    ({ docxPath, pdfPath, docxBuffer, pdfBuffer } = await getDocumentGeneratorService().generateDocuments({
+    prepared = await getDocumentGeneratorService().generateDocx({
       jalId,
       jalName: jal.name,
       docType: {
@@ -199,7 +202,8 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       signaturePath,
       signatureBuffer,
       signatureMime,
-    }));
+    });
+    ({ docxBuffer } = prepared);
 
     const documentNumber = await documentNumberService.assignDocumentNumber({ jalId, transaction: t });
 
@@ -213,13 +217,13 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       beneficiary_name: beneficiaryName,
       beneficiary_id: beneficiaryId,
       metadata: templateData,
-      file_path_docx: docxPath,
-      file_path_pdf: pdfPath,
+      file_path_docx: prepared.docxPath,
+      file_path_pdf: null, // se completa al generar el PDF, fuera de la transacción
       // Copia además en Postgres (no solo en disco): el disco del backend en Render
       // (free tier) es efímero, mientras que la BD sigue centralizada en el PC local
       // vía el túnel Tailscale. El disco se conserva como caché rápida cuando existe.
       file_docx: docxBuffer,
-      file_pdf: pdfBuffer,
+      file_pdf: null,
       sync_status: 'synced',
       document_number: documentNumber,
       numero_radicado: numeroRadicado,
@@ -235,6 +239,18 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       if (winner) return { doc: winner, docType: { id: winner.doc_type_id, name: winner.doc_type_name }, duplicate: true };
     }
     throw err;
+  }
+
+  try {
+    pdfBuffer = await getDocumentGeneratorService().generatePdfFor(prepared);
+    await doc.update({ file_pdf: pdfBuffer, file_path_pdf: prepared.pdfPath });
+  } catch (err) {
+    // El documento y su radicado ya son válidos: se registra y el PDF se generará al
+    // descargarlo. No se revierte (eso dejaría un hueco en la numeración oficial).
+    logger.error('documentService: no se pudo generar el PDF; se generará al descargar', {
+      documentId: doc.id, error: err.message,
+    });
+    errorTracking.captureError(err, { path: 'createDocument:pdf' });
   }
 
   // Fire-and-forget: si la JAL tiene Drive conectado, sube el DOCX/PDF ya generado.
