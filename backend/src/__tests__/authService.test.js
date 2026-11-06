@@ -118,19 +118,19 @@ describe('login() — PT-20', () => {
   });
 
   it('no bloquea la cuenta antes de alcanzar MAX_FAILED_ATTEMPTS', async () => {
-    const user = makeUser({ failed_attempts: 8 }); // intento 9 → no bloquea aún
+    const user = makeUser({ failed_attempts: authService.MAX_FAILED_ATTEMPTS - 2 }); // penúltimo intento → no bloquea aún
     mockScopedModel.findOne.mockResolvedValue(user);
     bcrypt.compare.mockResolvedValue(false);
 
     await expect(authService.login(BASE)).rejects.toMatchObject({ status: 401 });
 
     const updateArg = user.update.mock.calls[0][0];
-    expect(updateArg.failed_attempts).toBe(9);
+    expect(updateArg.failed_attempts).toBe(authService.MAX_FAILED_ATTEMPTS - 1);
     expect(updateArg.locked_until).toBeUndefined();
   });
 
   it('bloquea la cuenta al alcanzar MAX_FAILED_ATTEMPTS y resetea el contador', async () => {
-    const user = makeUser({ failed_attempts: 9 }); // intento 10 → bloquea
+    const user = makeUser({ failed_attempts: authService.MAX_FAILED_ATTEMPTS - 1 }); // último intento → bloquea
     mockScopedModel.findOne.mockResolvedValue(user);
     bcrypt.compare.mockResolvedValue(false);
 

@@ -9,6 +9,25 @@ const validate = require('../middleware/validate');
 const documentController = require('../controllers/documentController');
 const documentsSchemas = require('../validations/documents');
 const { uuidParam } = require('../validations/common');
+const rateLimit = require('express-rate-limit');
+const E = require('../config/errorCodes');
+
+// Consulta de datos de identidad por cédula (auditoría 2026-11-05, P3-4): límite propio
+// por usuario para que no sirva para recorrer el padrón. El formulario la llama una vez
+// por cédula escrita (con espera de 600 ms), así que 60 cada 10 minutos sobra para el
+// trabajo normal y frena la enumeración (antes cabían 300 por minuto).
+const PERSON_LOOKUP_PER_10_MIN = parseInt(process.env.PERSON_LOOKUP_PER_10_MIN || '60', 10);
+const personLookupLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: PERSON_LOOKUP_PER_10_MIN,
+  keyGenerator: (req) => `persona:${req.user?.sub}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => res.status(429).json({
+    error: true, code: E.RATE_LIMITED,
+    message: 'Demasiadas consultas por cédula. Escribe los datos a mano o espera unos minutos.',
+  }),
+});
 
 const MAX_MB = parseInt(process.env.MAX_FILE_SIZE_MB || '10', 10);
 
@@ -132,7 +151,7 @@ router.use(authenticate);
 // Lista propia + genera documento
 router.get('/my', validate(documentsSchemas.ownList, 'query'), documentController.list);
 // Datos de identidad de alguien ya atendido, para no volver a escribirlos
-router.get('/person', validate(documentsSchemas.personLookup, 'query'), documentController.findPerson);
+router.get('/person', personLookupLimiter, validate(documentsSchemas.personLookup, 'query'), documentController.findPerson);
 router.post('/', upload.single('firma'), validate(documentsSchemas.create), documentController.create);
 
 // ── Edil / Admin ──────────────────────────────────────────

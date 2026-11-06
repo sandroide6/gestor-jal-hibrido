@@ -76,7 +76,8 @@ Después de rotar: comprobar `/health`, iniciar sesión, y lanzar a mano «Respa
 
 | Mensaje | Causa | Qué hacer |
 |---|---|---|
-| «Cuenta bloqueada. Intente de nuevo en N minuto(s).» | 10 intentos fallidos | Esperar 15 minutos o que el administrador restablezca la contraseña |
+| «Demasiados intentos de inicio de sesión» (429) | 10 contraseñas erradas desde ese equipo en 15 minutos | Esperar 15 minutos o entrar desde otro equipo; la cuenta no está bloqueada |
+| «Cuenta bloqueada. Intente de nuevo en N minuto(s).» | 30 intentos fallidos desde varios equipos (posible ataque) | Esperar 15 minutos; revisar Auditoría (`auth.login`, `failure`) y, si no fue el usuario, cambiar su contraseña |
 | «Cuenta desactivada» | Usuario inactivo | Panel › Usuarios › activar |
 | Ventana «Elige tu propia contraseña» que no se cierra | Contraseña inicial o restablecida | Es lo esperado: cambiarla |
 | 403 «Origen no permitido» en todo | `ALLOWED_ORIGINS` no incluye el dominio del frontend | Corregir en Render |

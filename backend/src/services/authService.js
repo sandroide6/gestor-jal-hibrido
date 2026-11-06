@@ -8,7 +8,12 @@ const { tokenIssuedBefore } = require('../utils/tokenRevocation');
 const BCRYPT_ROUNDS = 12;
 const JWT_EXPIRY = '8h';
 const REFRESH_EXPIRY = '30d';
-const MAX_FAILED_ATTEMPTS = 10;
+// Bloqueo de la CUENTA solo ante un ataque desde muchos orígenes (auditoría 2026-11-05,
+// P3-2). Un solo equipo ya queda frenado antes por el límite de 10 fallos por IP de
+// routes/auth.js (429); con el umbral anterior (10) ese mismo equipo alcanzaba también
+// el bloqueo de la cuenta y dejaba fuera a su dueño en todos sus equipos. Con 30 hacen
+// falta al menos 3 orígenes distintos en 15 minutos.
+const MAX_FAILED_ATTEMPTS = 30;
 const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutos
 
 // En producción, las claves RS256 vienen de variables de entorno.
@@ -205,4 +210,4 @@ function issueRefreshToken(payload) {
   return issueToken({ ...payload, type: 'refresh' }, REFRESH_EXPIRY);
 }
 
-module.exports = { login, refresh, verifyToken, hashPassword, comparePassword, issueAccessToken, issueRefreshToken };
+module.exports = { MAX_FAILED_ATTEMPTS, login, refresh, verifyToken, hashPassword, comparePassword, issueAccessToken, issueRefreshToken };

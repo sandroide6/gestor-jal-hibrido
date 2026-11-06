@@ -92,6 +92,7 @@ Resumen; el paso a paso está en [DESPLIEGUE_HIBRIDO.md](../DESPLIEGUE_HIBRIDO.m
 | `ALLOW_TUNNEL_ORIGINS` | No | `true` acepta orígenes de ngrok/Cloudflare/Tailscale. Por defecto **no** (cualquiera puede crear un túnel de esos) |
 | `COOKIE_SAMESITE` | No | `lax` (por defecto), `strict` o `none` (solo si el frontend está en otro dominio sin reenvío) |
 | `RATE_LIMIT_PER_MIN` | No | Peticiones por minuto por usuario autenticado (o por IP si no hay sesión). Por defecto 300 |
+| `PERSON_LOOKUP_PER_10_MIN` | No | Consultas de datos por cédula por usuario cada 10 minutos. Por defecto 60 |
 | `LIBREOFFICE_MAX_CONCURRENCY` | No | Conversiones DOCX→PDF simultáneas. Por defecto 1 (adecuado para 512 MB de RAM) |
 | `RUN_MIGRATIONS` | No | `true` en la imagen de Render: aplica las migraciones pendientes al arrancar |
 | `ALERT_WEBHOOK_URL` | Recomendada | Webhook de ntfy.sh, Slack o Discord para avisos de errores 5xx, base caída y caídas del proceso. Sin datos personales |
