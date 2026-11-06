@@ -1,0 +1,52 @@
+# Blueprint de Render para STAGING (auditoría 2026-11-05, plan 4.2).
+# Crear en Render: New → Blueprint → este repositorio → "Blueprint path":
+#   deploy/staging/render.staging.yaml
+# Es un servicio APARTE del de producción (otro nombre, otra base, otras claves). Se
+# despliega desde la rama `staging`: para probar un cambio antes de producción, llevarlo
+# a esa rama (git push origin <rama>:staging) y revisar
+# https://gestor-jal-staging.onrender.com antes de fusionar a main.
+services:
+  - type: web
+    name: gestor-jal-staging
+    runtime: docker
+    dockerfilePath: ./deploy/staging/Dockerfile
+    dockerContext: .
+    plan: free
+    branch: staging
+    healthCheckPath: /health/live
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: RUN_MIGRATIONS
+        value: "true"
+      # Base de datos de STAGING: un proyecto de Supabase distinto al de producción
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: "true"
+      - key: DB_SSL_CA
+        sync: false
+      # Claves propias de staging (node deploy/generar-claves.js); NUNCA las de producción
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_PRIVATE_KEY
+        sync: false
+      - key: JWT_PUBLIC_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: ADMIN_INITIAL_PASSWORD
+        sync: false
+      # Frontend y API en el mismo origen: las cookies quedan SameSite=Lax sin más ajustes
+      - key: ALLOWED_ORIGINS
+        value: https://gestor-jal-staging.onrender.com
+      - key: TRUST_PROXY_HOPS
+        value: "1"
+      - key: SENTRY_ENVIRONMENT
+        value: staging
+      - key: SENTRY_DSN
+        sync: false
+      - key: ALERT_WEBHOOK_URL
+        sync: false

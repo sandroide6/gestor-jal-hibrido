@@ -1,0 +1,7 @@
+# Contexto de las imágenes Docker (raíz del repositorio). Las dependencias se instalan
+# dentro de la imagen con npm ci: copiar las del equipo pisaría las de la imagen y haría
+# el contexto enorme. Los .env NO se excluyen porque la instalación on-prem
+# (deploy/Dockerfile.frontend) puede leer frontend/.env al compilar.
+**/node_modules
+.git
+frontend/dist

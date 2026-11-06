@@ -119,6 +119,31 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: deploy/render/prueba-imagen.sh gestor-render:ci
 
+  # Imagen de staging (auditoría 2026-11-05, plan 4.2): backend + frontend en un solo
+  # servicio. Misma prueba de humo que la de Render y, además, que sirva el frontend.
+  imagen-staging:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Construir la imagen de staging
+        run: docker build -f deploy/staging/Dockerfile -t gestor-staging:ci .
+      - name: Prueba de humo de la imagen
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          CON_FRONTEND: '1'
+        run: deploy/render/prueba-imagen.sh gestor-staging:ci
+
   # Prueba de extremo a extremo en Chromium (auditoría 2026-11-05, fase 6): el
   # administrador sembrado entra con la contraseña inicial, se le obliga a cambiarla,
   # crea un Certificado de Residencia con la plantilla oficial y descarga el PDF.

@@ -6,6 +6,7 @@
 # LibreOffice DENTRO de la imagen y descarga.
 #
 # Uso: DATABASE_URL=postgresql://...  deploy/render/prueba-imagen.sh <imagen>
+#      CON_FRONTEND=1 para la imagen de staging, que además sirve el frontend.
 # Requiere que el contenedor alcance DATABASE_URL con --network host.
 set -euo pipefail
 IMAGE="${1:?Uso: $0 <imagen>}"
@@ -58,6 +59,16 @@ if strings "$WORK/doc.pdf" | grep -q 'Producer<FEFF004C0069006200720065004F00660
   echo "[prueba] OK  documento con plantilla oficial y PDF generado por LibreOffice dentro de la imagen ($(wc -c < "$WORK/doc.pdf") bytes)"
 else
   echo "[prueba] FALLA: el PDF no lo generó LibreOffice (se usó el respaldo sin estilos)"; exit 1
+fi
+
+# Imagen de staging (deploy/staging/Dockerfile): además debe servir el frontend compilado
+# en el mismo origen, con el fallback de rutas de la SPA.
+if [ "${CON_FRONTEND:-0}" = 1 ]; then
+  for ruta in / /login /documentos; do
+    curl -sf "$BASE$ruta" | grep -q '<div id="root">' || { echo "[prueba] FALLA: $ruta no devuelve el frontend"; exit 1; }
+  done
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/v1/no-existe")" = 404 ] || { echo "[prueba] FALLA: /v1 desconocida no da 404"; exit 1; }
+  echo "[prueba] OK  frontend servido por el mismo servicio (/, /login, /documentos) y /v1 desconocida en 404"
 fi
 
 OK=1
