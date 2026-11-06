@@ -1,9 +1,11 @@
+import { Fragment } from 'react';
 import PropTypes from 'prop-types';
 import { Navigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 
 export default function RoleGuard({ children, requireAuth = false, roles = [] }) {
-  const { isAuthenticated, hasRole } = useAuthStore();
+  const { isAuthenticated, hasRole, user } = useAuthStore();
+  const mustChangePassword = !!user?.must_change_password;
 
   if (requireAuth && !isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -24,7 +26,10 @@ export default function RoleGuard({ children, requireAuth = false, roles = [] })
     );
   }
 
-  return children;
+  // Mientras la contraseña inicial no se cambie, la API rechaza casi todo con 403 y la
+  // página se queda con esos errores. La clave cambia cuando se completa el cambio, así la
+  // página se vuelve a montar y carga sus datos de cero.
+  return <Fragment key={mustChangePassword ? 'cambio-pendiente' : 'lista'}>{children}</Fragment>;
 }
 
 RoleGuard.propTypes = {

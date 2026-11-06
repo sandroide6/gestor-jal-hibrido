@@ -3,11 +3,17 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User, AuditLog } = require('../models');
 const E = require('../config/errorCodes');
+const { tokenIssuedBefore } = require('../utils/tokenRevocation');
 
 const BCRYPT_ROUNDS = 12;
 const JWT_EXPIRY = '8h';
 const REFRESH_EXPIRY = '30d';
-const MAX_FAILED_ATTEMPTS = 10;
+// Bloqueo de la CUENTA solo ante un ataque desde muchos orígenes (auditoría 2026-11-05,
+// P3-2). Un solo equipo ya queda frenado antes por el límite de 10 fallos por IP de
+// routes/auth.js (429); con el umbral anterior (10) ese mismo equipo alcanzaba también
+// el bloqueo de la cuenta y dejaba fuera a su dueño en todos sus equipos. Con 30 hacen
+// falta al menos 3 orígenes distintos en 15 minutos.
+const MAX_FAILED_ATTEMPTS = 30;
 const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutos
 
 // En producción, las claves RS256 vienen de variables de entorno.
@@ -152,6 +158,7 @@ async function login({ email, password, ip }) {
       role: user.role,
       jal_id: user.jal_id,
       consent_accepted_at: user.consent_accepted_at || null,
+      must_change_password: !!user.must_change_password,
     },
   };
 }
@@ -175,11 +182,9 @@ async function refresh({ refreshToken, ip }) {
 
   // Mismo chequeo que authenticate.js para access tokens: un cambio de contraseña o
   // "cerrar todas las sesiones" invalida también los refresh tokens ya emitidos.
-  if (user.tokens_invalid_before) {
-    const issuedAt = new Date((payload.iat || 0) * 1000);
-    if (issuedAt < new Date(user.tokens_invalid_before)) {
-      throw Object.assign(new Error('Sesión expirada. Inicie sesión nuevamente.'), { status: 401, code: E.AUTH_TOKEN_REVOKED });
-    }
+  // Comparación en segundos: ver utils/tokenRevocation.js
+  if (tokenIssuedBefore(payload, user.tokens_invalid_before)) {
+    throw Object.assign(new Error('Sesión expirada. Inicie sesión nuevamente.'), { status: 401, code: E.AUTH_TOKEN_REVOKED });
   }
 
   const tokenPayload = {
@@ -205,4 +210,4 @@ function issueRefreshToken(payload) {
   return issueToken({ ...payload, type: 'refresh' }, REFRESH_EXPIRY);
 }
 
-module.exports = { login, refresh, verifyToken, hashPassword, comparePassword, issueAccessToken, issueRefreshToken };
+module.exports = { MAX_FAILED_ATTEMPTS, login, refresh, verifyToken, hashPassword, comparePassword, issueAccessToken, issueRefreshToken };

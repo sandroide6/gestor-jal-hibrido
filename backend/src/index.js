@@ -1,9 +1,13 @@
 'use strict';
+// Sentry se inicia antes de cargar Express para que pueda instrumentarlo (si hay SENTRY_DSN)
+const errorTracking = require('./services/errorTracking');
+errorTracking.init();
 const logger = require('./config/logger');
 const app    = require('./app');
 const { sequelize } = require('./models');
 const { checkAutoBackups } = require('./services/driveBackupService');
 const wordConverter = require('./services/wordConverter');
+const { sendAlert } = require('./services/alertService');
 
 const PORT      = parseInt(process.env.PORT || '3001', 10);
 const BIND_HOST = '0.0.0.0';
@@ -36,13 +40,33 @@ function shutdown(signal) {
       logger.error('Error al cerrar Sequelize', { message: err.message });
     }
     logger.info('Servidor cerrado.');
-    process.exit(0);
+    process.exit(signal === 'SIGTERM' || signal === 'SIGINT' ? 0 : 1);
   });
   setTimeout(() => {
     logger.error('Timeout de cierre — forzando salida.');
     process.exit(1);
   }, 10_000);
 }
+// Auditoría 2026-11-05 (P2-6): sin estos manejadores, una promesa rechazada sin catch
+// o una excepción no capturada tumbaban el proceso sin dejar el error en el log
+// estructurado. Se registra y se sale con cierre ordenado; Render vuelve a arrancarlo.
+let crashing = false;
+function fatal(kind, err) {
+  logger.error(`${kind} — el proceso se reiniciará`, { error: err?.message || String(err), stack: err?.stack });
+  if (crashing) return;
+  crashing = true;
+  // Se intenta avisar antes de cerrar; shutdown() fuerza la salida a los 10 s de todos modos
+  errorTracking.captureError(err instanceof Error ? err : new Error(String(err)), { status: kind });
+  Promise.all([
+    sendAlert(kind, { summary: `el proceso se reinicia por ${kind} (${err?.name || 'Error'})` }),
+    errorTracking.flush(3000),
+  ])
+    .catch(() => {})
+    .finally(() => shutdown(kind));
+}
+process.on('unhandledRejection', (reason) => fatal('unhandledRejection', reason));
+process.on('uncaughtException', (err) => fatal('uncaughtException', err));
+
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT',  () => shutdown('SIGINT'));
 

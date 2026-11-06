@@ -6,6 +6,7 @@ const request = require('supertest');
 const jwt     = require('jsonwebtoken');
 const app     = require('../app');
 const models  = require('../models');
+const { mockActiveSessionUser } = require('./helpers/activeUser');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
@@ -25,9 +26,9 @@ function auxiliarToken() {
   return makeToken({ sub: 'aux-1', jal_id: 'jal-1', role: 'auxiliar' });
 }
 
-// Simula offline-tolerance: findByPk rechaza → authenticate confía en el JWT
+// Sesión simulada sin base: authenticate recibe un usuario activo (helpers/activeUser.js)
 function mockOfflineDb() {
-  return vi.spyOn(models.User, 'findByPk').mockRejectedValue(new Error('test-db-offline'));
+  return mockActiveSessionUser();
 }
 
 afterEach(() => vi.restoreAllMocks());

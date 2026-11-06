@@ -12,7 +12,7 @@ module.exports = {
   settings: { react: { version: '18.2' } },
   rules: {
     'react/prop-types': 'off',
-    'no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+    'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
   },
   overrides: [
     {

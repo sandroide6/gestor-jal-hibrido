@@ -13,9 +13,9 @@ const STORAGE_ROOT = path.resolve(process.env.STORAGE_PATH || path.join(__dirnam
 
 async function create(req, res, next) {
   try {
-    const { doc_type_id, beneficiary_name, beneficiary_id, edil_id, ...formFields } = req.body;
+    const { doc_type_id, beneficiary_name, beneficiary_id, edil_id, client_local_id, ...formFields } = req.body;
 
-    const { doc, docType } = await docService.createDocument({
+    const { doc, docType, duplicate } = await docService.createDocument({
       jalId: req.user.jal_id,
       userId: req.user.sub,
       role: req.user.role,
@@ -26,9 +26,12 @@ async function create(req, res, next) {
       uploadedSignature: req.file || null,
       ip: getIp(req),
       edilId: edil_id || null,
+      clientLocalId: client_local_id || null,
     });
 
-    if (edil_id) {
+    // Reintento de un envío que ya se procesó: se devuelve el mismo documento (200)
+    // sin volver a notificar.
+    if (edil_id && !duplicate) {
       await notificationService.notify({
         userId: edil_id,
         type: 'document.pending_review',
@@ -37,13 +40,14 @@ async function create(req, res, next) {
       });
     }
 
-    res.status(201).json({
+    res.status(duplicate ? 200 : 201).json({
       id: doc.id,
+      duplicate: !!duplicate,
       document_number: doc.document_number,
       numero_radicado: doc.numero_radicado,
       doc_type_name: docType.name,
-      beneficiary_name,
-      beneficiary_id,
+      beneficiary_name: doc.beneficiary_name ?? beneficiary_name,
+      beneficiary_id: doc.beneficiary_id ?? beneficiary_id,
       created_at: doc.created_at,
       download: {
         docx: `/documents/${doc.id}/download?format=docx`,
@@ -99,6 +103,16 @@ async function download(req, res, next) {
       res.setHeader('Content-Type', mimeType);
       res.setHeader('Content-Disposition', `attachment; filename="documento_${doc.id.slice(0, 8)}.${format}"`);
       return res.send(fileBytes);
+    }
+
+    // El PDF se genera después de guardar el documento (P2-2); si esa conversión falló,
+    // se genera ahora desde el DOCX guardado y se deja en la base para la próxima vez.
+    if (format === 'pdf' && doc.file_docx) {
+      const pdf = await require('../services/documentGeneratorService').docxBufferToPdf(doc.file_docx);
+      await doc.update({ file_pdf: pdf });
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="documento_${doc.id.slice(0, 8)}.pdf"`);
+      return res.send(pdf);
     }
 
     return res.status(404).json({ error: true, message: `Archivo ${format.toUpperCase()} no disponible` });

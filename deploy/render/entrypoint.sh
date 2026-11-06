@@ -49,4 +49,14 @@ else
   fi
 fi
 
+# Migraciones al desplegar (auditoría 2026-11-05, P2-5). Render Free no tiene
+# "pre-deploy command", así que se hacen aquí, antes de abrir el puerto. Si una
+# migración falla, el contenedor sale con error, no pasa el health check y Render
+# mantiene la versión anterior en línea. Antes de desplegar una versión con
+# migraciones nuevas, lanza a mano el workflow "Respaldo diario".
+if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+  echo "[entrypoint] Aplicando migraciones pendientes…" >&2
+  npx --no-install sequelize-cli db:migrate || { echo "[entrypoint] ERROR: las migraciones fallaron; no se arranca esta versión" >&2; exit 1; }
+fi
+
 exec node src/index.js

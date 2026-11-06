@@ -17,6 +17,7 @@ const request = require('supertest');
 const jwt     = require('jsonwebtoken');
 const app     = require('../app');
 const models  = require('../models');
+const { mockActiveSessionUser } = require('./helpers/activeUser');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
@@ -29,7 +30,7 @@ function auxiliarToken() {
 }
 
 function mockOfflineDb() {
-  return vi.spyOn(models.User, 'findByPk').mockRejectedValue(new Error('test-db-offline'));
+  return mockActiveSessionUser();
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -98,6 +99,7 @@ describe('POST /v1/sync/batch — autenticación y validación', () => {
   it('200 y marca la operación como conflicto cuando el tipo de documento no existe', async () => {
     mockOfflineDb();
     vi.spyOn(models.DocType, 'findOne').mockResolvedValue(null);
+    vi.spyOn(models.Document, 'findOne').mockResolvedValue(null); // sin envío previo con ese localId
     vi.spyOn(models.AuditLog, 'create').mockResolvedValue({});
 
     const res = await request(app)
@@ -111,7 +113,7 @@ describe('POST /v1/sync/batch — autenticación y validación', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.results).toEqual([
-      { localId: 'x1', status: 'conflict', message: 'Tipo de documento no encontrado o inactivo' },
+      { localId: 'x1', status: 'conflict', code: 'DOC_TYPE_NOT_FOUND', message: 'Tipo de documento no encontrado o inactivo' },
     ]);
     expect(models.DocType.findOne).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'dt-1', jal_id: 'jal-1', active: true } })

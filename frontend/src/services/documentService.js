@@ -85,7 +85,14 @@ export async function fetchDocTypes(token) {
 // ── Generación de documentos ──────────────────────────────
 
 export async function generateDocument({ docType, formData, beneficiaryName, beneficiaryId, token, edilId, edilName, edilCargo }) {
+  // Un solo identificador por intento de creación, generado ANTES de enviar. Si la
+  // respuesta en línea se pierde (corte de red, arranque en frío del servidor) y el
+  // documento cae a la cola sin conexión, la cola reenvía el MISMO id y el servidor
+  // devuelve el documento ya creado en vez de otro con otro radicado (auditoría
+  // 2026-11-05, P0-2).
+  const localId = uuidv4();
   const payload = {
+    client_local_id: localId,
     doc_type_id: docType.id,
     beneficiary_name: beneficiaryName,
     beneficiary_id: beneficiaryId,
@@ -118,7 +125,6 @@ export async function generateDocument({ docType, formData, beneficiaryName, ben
   }
 
   // ── Modo offline ────────────────────────────────────────
-  const localId = uuidv4();
   const localDoc = {
     id: localId,
     docTypeName: docType.name,

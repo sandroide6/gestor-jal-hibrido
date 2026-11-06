@@ -100,7 +100,7 @@ async function validate(req, res, next) {
     setAuthCookies(req, res, { accessToken, refreshToken, rememberMe: true });
 
     res.json({
-      user: { id: user.id, name: user.name, email: user.email, role: user.role, jal_id: user.jal_id },
+      user: { id: user.id, name: user.name, email: user.email, role: user.role, jal_id: user.jal_id, must_change_password: !!user.must_change_password },
     });
   } catch (err) { next(err); }
 }

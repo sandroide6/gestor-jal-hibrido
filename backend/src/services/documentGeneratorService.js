@@ -497,7 +497,10 @@ function formatDateFields(fields, data) {
   return out;
 }
 
-async function generateDocuments({
+// Paso 1 (rápido, ~decenas de ms): arma el DOCX y lo deja en disco. documentService lo
+// llama DENTRO de la transacción que reclama el radicado, porque el número va impreso en
+// el documento. Devuelve también lo necesario para el paso 2.
+async function generateDocx({
   jalId,
   jalName,
   docType, // { id, name, fields, template_path }
@@ -512,7 +515,6 @@ async function generateDocuments({
 
   const docxPath = path.join(outDir, docxName);
 
-  // Generar DOCX
   let docxBuffer;
   const hasTemplateData = !!docType.template_data;
   const resolvedTplPath = docType.template_path ? resolveTemplatePath(docType.template_path) : null;
@@ -537,23 +539,40 @@ async function generateDocuments({
   }
   fs.writeFileSync(docxPath, docxBuffer);
 
-  // Generar PDF
-  const pdfPath = path.join(outDir, pdfName);
-  const usesTemplate = hasTemplateData || (resolvedTplPath && fs.existsSync(resolvedTplPath));
-  let pdfBuffer;
-  if (usesTemplate) {
-    // Convertir DOCX renderizado → PDF preservando el layout exacto del template
-    pdfBuffer = await docxBufferToPdf(docxBuffer);
-  } else {
-    pdfBuffer = await generatePdf({ jalName, docTypeName: docType.name, fields: docType.fields, data, signaturePath, signatureBuffer, signatureMime });
-  }
-  fs.writeFileSync(pdfPath, pdfBuffer);
+  const usesTemplate = !!(hasTemplateData || (resolvedTplPath && fs.existsSync(resolvedTplPath)));
+  return {
+    docxPath,
+    docxName,
+    pdfPath: path.join(outDir, pdfName),
+    pdfName,
+    docxBuffer,
+    pdfJob: { usesTemplate, jalName, docTypeName: docType.name, fields: docType.fields, data, signaturePath, signatureBuffer, signatureMime },
+  };
+}
 
-  // docxBuffer/pdfBuffer también se devuelven (no solo las rutas de disco) para que
-  // documentService.js pueda guardarlos en Postgres (columnas file_docx/file_pdf) —
-  // necesario porque el disco de un backend en Render (free tier) es efímero y no
-  // sobrevive a un redeploy o reinicio del contenedor.
+// Paso 2 (lento con plantilla: LibreOffice tarda segundos): genera el PDF. documentService
+// lo llama FUERA de la transacción del radicado (auditoría 2026-11-05, P2-2), para no
+// tener bloqueado el contador ni ocupada la conexión mientras convierte.
+async function generatePdfFor(prepared) {
+  const { usesTemplate, jalName, docTypeName, fields, data, signaturePath, signatureBuffer, signatureMime } = prepared.pdfJob;
+  const pdfBuffer = usesTemplate
+    // Convertir DOCX renderizado → PDF preservando el layout exacto del template
+    ? await docxBufferToPdf(prepared.docxBuffer)
+    : await generatePdf({ jalName, docTypeName, fields, data, signaturePath, signatureBuffer, signatureMime });
+  fs.writeFileSync(prepared.pdfPath, pdfBuffer);
+  return pdfBuffer;
+}
+
+// Los dos pasos seguidos (mismo resultado que antes de separarlos).
+// docxBuffer/pdfBuffer también se devuelven (no solo las rutas de disco) para que
+// documentService.js pueda guardarlos en Postgres (columnas file_docx/file_pdf) —
+// necesario porque el disco de un backend en Render (free tier) es efímero y no
+// sobrevive a un redeploy o reinicio del contenedor.
+async function generateDocuments(args) {
+  const prepared = await generateDocx(args);
+  const pdfBuffer = await generatePdfFor(prepared);
+  const { docxPath, pdfPath, docxName, pdfName, docxBuffer } = prepared;
   return { docxPath, pdfPath, docxName, pdfName, docxBuffer, pdfBuffer };
 }
 
-module.exports = { generateDocuments, generateDocxFromTemplate, formatDateFields };
+module.exports = { generateDocuments, generateDocx, generatePdfFor, docxBufferToPdf, generateDocxFromTemplate, formatDateFields };

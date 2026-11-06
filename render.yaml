@@ -13,12 +13,17 @@ services:
     dockerfilePath: ./deploy/render/Dockerfile.backend
     dockerContext: .
     plan: free
-    healthCheckPath: /health
+    # /health/live no toca la base: una caída de Supabase no debe provocar reinicios en
+    # bucle. La disponibilidad con base (/v1/health) la vigila el monitor externo.
+    healthCheckPath: /health/live
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: "3001"
+      # Aplica las migraciones pendientes al arrancar (ver deploy/render/entrypoint.sh)
+      - key: RUN_MIGRATIONS
+        value: "true"
 
       # ── Base de datos (Supabase) ────────────────────────────────────
       - key: DATABASE_URL
@@ -90,4 +95,15 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: GOOGLE_REDIRECT_URI
+        sync: false
+
+      # ── Auditoría 2026-11-05: TLS verificado a Supabase y avisos ─────
+      # DB_SSL_CA: certificado de la CA de Supabase (panel › Database › SSL).
+      - key: DB_SSL_CA
+        sync: false
+      # ALERT_WEBHOOK_URL: ntfy.sh, Slack o Discord (opcional pero recomendado).
+      - key: ALERT_WEBHOOK_URL
+        sync: false
+      # SENTRY_DSN: registro de errores (opcional). Sin él, Sentry queda inactivo.
+      - key: SENTRY_DSN
         sync: false

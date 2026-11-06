@@ -66,7 +66,7 @@ Correcciones hechas en esta entrega: `docker-compose.yml` no pasaba `ENCRYPTION_
 Resumen; el paso a paso está en [DESPLIEGUE_HIBRIDO.md](../DESPLIEGUE_HIBRIDO.md).
 
 1. **Supabase:** crear el proyecto y usar la cadena del *session pooler* como `DATABASE_URL`, con `DB_SSL=true`.
-2. **Render:** crear el servicio desde `render.yaml` (imagen `deploy/render/Dockerfile.backend`). Cargar los secretos marcados `sync: false`: `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` (agregados a `render.yaml` en esta entrega) y, si aplican, Google, Tailscale, receptor local, `TRUST_PROXY_HOPS` y `METRICS_TOKEN`. Las migraciones **no** corren solas: ejecutarlas contra Supabase antes de abrir el servicio.
+2. **Render:** crear el servicio desde `render.yaml` (imagen `deploy/render/Dockerfile.backend`). Cargar los secretos marcados `sync: false`: `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` (agregados a `render.yaml` en esta entrega) y, si aplican, Google, Tailscale, receptor local, `TRUST_PROXY_HOPS` y `METRICS_TOKEN`. Desde el 05-11-2026 las migraciones corren solas al arrancar (`RUN_MIGRATIONS=true` en `render.yaml`); si una falla, el contenedor no abre el puerto y Render mantiene la versión anterior. Agregar también `ALLOWED_ORIGINS` (dominio de Vercel) y `DB_SSL_CA` (certificado del panel de Supabase).
 3. **Vercel:** proyecto con raíz `frontend/`; `frontend/vercel.json` reenvía `/v1` y `/health` al backend de Render. Si cambia la URL del backend, cambiarla ahí.
 4. **Verificar:** `/health`, inicio de sesión, documento de prueba y `TRUST_PROXY_HOPS` (que el registro muestre IP distintas para equipos distintos).
 
@@ -82,13 +82,24 @@ Resumen; el paso a paso está en [DESPLIEGUE_HIBRIDO.md](../DESPLIEGUE_HIBRIDO.m
 |---|---|---|
 | `DATABASE_URL` | Sí | Conexión a PostgreSQL |
 | `DB_SSL` | En la nube | `true` para Supabase |
+| `DB_SSL_CA` | Recomendada en la nube | Certificado de la CA de Supabase (PEM o ruta a archivo). Con ella se verifica el certificado del servidor |
+| `DB_SSL_VERIFY` | No | `true` verifica el certificado contra las CA del sistema (alternativa a `DB_SSL_CA`) |
 | `NODE_ENV` | Sí | `production` en cualquier instalación real |
 | `JWT_SECRET` | Sí en producción | Distinta a la de ejemplo |
 | `JWT_PRIVATE_KEY`, `JWT_PUBLIC_KEY` | Sí en producción | Par RSA en una línea con `\n` (usar `deploy/generar-claves.js`) |
 | `ENCRYPTION_KEY` | Sí en producción | 32 bytes en hexadecimal; cifra los tokens de Drive. **Si se pierde, hay que volver a conectar Drive** |
-| `ALLOWED_ORIGINS` | Sí si el frontend está en otro origen | Lista separada por comas |
+| `ALLOWED_ORIGINS` | Sí si el frontend está en otro origen | Lista separada por comas. Las peticiones del mismo origen (Vercel reenviando `/v1`) se aceptan sin estar en la lista |
+| `ALLOW_TUNNEL_ORIGINS` | No | `true` acepta orígenes de ngrok/Cloudflare/Tailscale. Por defecto **no** (cualquiera puede crear un túnel de esos) |
+| `COOKIE_SAMESITE` | No | `lax` (por defecto), `strict` o `none` (solo si el frontend está en otro dominio sin reenvío) |
+| `RATE_LIMIT_PER_MIN` | No | Peticiones por minuto por usuario autenticado (o por IP si no hay sesión). Por defecto 300 |
+| `PERSON_LOOKUP_PER_10_MIN` | No | Consultas de datos por cédula por usuario cada 10 minutos. Por defecto 60 |
+| `LIBREOFFICE_MAX_CONCURRENCY` | No | Conversiones DOCX→PDF simultáneas. Por defecto 1 (adecuado para 512 MB de RAM) |
+| `RUN_MIGRATIONS` | No | `true` en la imagen de Render: aplica las migraciones pendientes al arrancar |
+| `ALERT_WEBHOOK_URL` | Recomendada | Webhook de ntfy.sh, Slack o Discord para avisos de errores 5xx, base caída y caídas del proceso. Sin datos personales |
+| `ALERT_THROTTLE_MIN` | No | Minutos mínimos entre avisos del mismo tipo. Por defecto 15 |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | No | Registro de errores 5xx y caídas en Sentry. Sin DSN queda inactivo. Se envían tipo, traza, ruta sin parámetros y `requestId`; cédulas y correos se tapan |
 | `PORT` | No | 3001 por defecto en el ejemplo |
-| `ADMIN_INITIAL_PASSWORD` | Muy recomendada | Contraseña del administrador que crea el seeder |
+| `ADMIN_INITIAL_PASSWORD` | Sí en producción para sembrar | Contraseña inicial del administrador que crea el seeder; el seeder se niega a correr en producción sin ella. Hay que cambiarla al primer ingreso |
 | `TRUST_PROXY_HOPS` | Detrás de proxy | Por defecto 1 |
 | `METRICS_TOKEN` | No | Habilita `/metrics` en producción |
 | `STORAGE_PATH`, `TEMPLATES_PATH`, `MAX_FILE_SIZE_MB`, `BACKUPS_LOCAL_PATH` | No | Rutas y límites |
@@ -97,7 +108,7 @@ Resumen; el paso a paso está en [DESPLIEGUE_HIBRIDO.md](../DESPLIEGUE_HIBRIDO.m
 | `LOCAL_DOC_RECEIVER_URL`, `LOCAL_DOC_RECEIVER_TOKEN` | Solo para el receptor local | |
 | `LOG_SQL` | No | Depuración |
 
-No las lee el backend (ver D6 y D7 del [Estado real](../00_LEEME/ESTADO_REAL_DEL_PROYECTO.md)): `JAL_NOMBRE`, `JAL_NOMBRE_CORTO`, `VAPID_*`. Frontend: `VITE_API_URL` (normalmente `/v1`) y `VITE_JAL_NOMBRE`.
+No las lee el backend (ver D6 y D7 del [Estado real](../00_LEEME/ESTADO_REAL_DEL_PROYECTO.md)): `JAL_NOMBRE`, `JAL_NOMBRE_CORTO`, `VAPID_*`. Frontend: `VITE_API_URL` (normalmente `/v1`), `VITE_JAL_NOMBRE` y, opcional, `VITE_SENTRY_DSN` / `VITE_SENTRY_ENVIRONMENT` (el SDK solo se descarga si hay DSN).
 
 **Nunca** subir `.env` al repositorio (está en `.gitignore`) ni enviar estos valores por correo o chat.
 
@@ -107,7 +118,7 @@ No las lee el backend (ver D6 y D7 del [Estado real](../00_LEEME/ESTADO_REAL_DEL
 2. Actualizar el código o la imagen.
 3. `npm run db:migrate` (solo aplica las pendientes).
 4. Verificar `/health` y un documento de prueba.
-5. **Vuelta atrás:** volver a la versión anterior del código. Si la nueva versión tenía migraciones, preferir **restaurar el respaldo** del paso 1 antes que `db:migrate:undo`, porque deshacer migraciones en una base con datos puede borrar columnas. El procedimiento de vuelta atrás no se ha ensayado.
+5. **Vuelta atrás:** volver a la versión anterior del código. Si la nueva versión tenía migraciones, preferir **restaurar el respaldo** del paso 1 antes que `db:migrate:undo`, porque deshacer migraciones en una base con datos puede borrar columnas. El procedimiento de vuelta atrás no se ha ensayado. Pasos por plataforma en el [Runbook de incidentes](../07_OPERACION/RUNBOOK_INCIDENTES.md#6-volver-a-una-versión-anterior).
 
 ## 8. Diagnóstico
 

@@ -86,7 +86,7 @@ async function changePassword(req, res, next) {
 
     const newHash = await authService.hashPassword(newPassword);
     const now = new Date();
-    await user.update({ password_hash: newHash, tokens_invalid_before: now });
+    await user.update({ password_hash: newHash, tokens_invalid_before: now, must_change_password: false });
 
     // tokens_invalid_before acaba de avanzar, así que el access Y el refresh token
     // vigentes (emitidos antes de ahora) quedan invalidados — hay que emitir ambos de

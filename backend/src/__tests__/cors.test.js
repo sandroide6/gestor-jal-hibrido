@@ -1,63 +1,67 @@
 'use strict';
-// Fix: app.js — los patrones de CORS para túneles (ngrok, cloudflare, serveo, loca.lt)
-// no estaban anclados con ^ al inicio, y el de ngrok terminaba en `.*$` (comodín
-// abierto). Esto permitía que un origen atacante que solo CONTUVIERA la subcadena
-// ".ngrok-" o ".ngrok." en cualquier posición del hostname pasara la validación de
-// CORS — con `credentials: true`, eso habilita CSRF de sesión desde un dominio ajeno.
+// CORS (auditoría de producción 2026-11-05, P0-3). Antes se aceptaba con credenciales
+// cualquier subdominio de trycloudflare.com, ngrok, loca.lt y serveo: cualquiera puede
+// crear uno gratis, así que una página ajena podía leer datos con la sesión de la
+// víctima. Ahora solo pasan ALLOWED_ORIGINS y el propio origen del servidor (modo
+// túnel local, donde el frontend se sirve desde el mismo host). Los patrones de túnel
+// quedan detrás de ALLOW_TUNNEL_ORIGINS=true, apagado por defecto.
 process.env.NODE_ENV = 'test';
 
 const request = require('supertest');
 const app = require('../app');
 
-async function originStatus(origin) {
-  const res = await request(app).get('/health').set('Origin', origin);
-  return res;
-}
+// Ruta inexistente: responde 404 sin tocar la base, pero pasa por el middleware de CORS
+const PATH = '/v1/__cors_probe__';
+const get = (origin, extra = {}) => {
+  let r = request(app).get(PATH).set('Origin', origin);
+  for (const [k, v] of Object.entries(extra)) r = r.set(k, v);
+  return r;
+};
 
-describe('CORS — patrones de túneles anclados', () => {
-  it('permite un subdominio real de ngrok-free.app', async () => {
-    const res = await originStatus('https://a1b2-190-1-1-1.ngrok-free.app');
-    expect(res.headers['access-control-allow-origin']).toBe('https://a1b2-190-1-1-1.ngrok-free.app');
-    expect(res.status).toBe(200);
+afterEach(() => { delete process.env.ALLOW_TUNNEL_ORIGINS; });
+
+describe('CORS — solo orígenes configurados', () => {
+  it('permite un origen de ALLOWED_ORIGINS (por defecto http://localhost:5173) con credenciales', async () => {
+    const res = await get('http://localhost:5173');
+    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:5173');
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
   });
 
-  it('permite un subdominio real de ngrok.io (legado)', async () => {
-    const res = await originStatus('https://mi-tunel.ngrok.io');
-    expect(res.headers['access-control-allow-origin']).toBe('https://mi-tunel.ngrok.io');
-  });
-
-  it('permite un subdominio real de trycloudflare.com', async () => {
-    const res = await originStatus('https://random-words-here.trycloudflare.com');
-    expect(res.headers['access-control-allow-origin']).toBe('https://random-words-here.trycloudflare.com');
-  });
-
-  it('rechaza un dominio atacante que solo CONTIENE ".ngrok-" como subcadena (regresión del hallazgo de auditoría)', async () => {
-    const res = await originStatus('https://x.ngrok-evil.com');
+  it.each([
+    'https://atacante-cualquiera.trycloudflare.com',
+    'https://a1b2-190-1-1-1.ngrok-free.app',
+    'https://mi-tunel.ngrok.io',
+    'https://x.loca.lt',
+    'https://x.serveo.net',
+  ])('rechaza el subdominio de túnel público %s', async (origin) => {
+    const res = await get(origin);
     expect(res.headers['access-control-allow-origin']).toBeUndefined();
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(403);
+  });
+
+  it('rechaza un origen ajeno con 403 y sin traza', async () => {
+    const res = await get('https://evil.com');
+    expect(res.status).toBe(403);
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
     expect(res.body.message).toMatch(/Origen no permitido por CORS/);
+    expect(res.body.stack).toBeUndefined();
   });
 
-  it('rechaza un dominio atacante que solo CONTIENE ".ngrok." como subcadena', async () => {
-    const res = await originStatus('https://x.ngrok.evil.com');
-    expect(res.headers['access-control-allow-origin']).toBeUndefined();
-    expect(res.status).toBe(500);
+  it('acepta el mismo origen del servidor (modo túnel local: frontend y API en el mismo host)', async () => {
+    const res = await get('https://mi-tunel.ngrok-free.app', { Host: 'mi-tunel.ngrok-free.app' });
+    expect(res.headers['access-control-allow-origin']).toBe('https://mi-tunel.ngrok-free.app');
   });
 
-  it('rechaza un dominio atacante que termina en "trycloudflare.com" sin el punto separador', async () => {
-    const res = await originStatus('https://evil-trycloudflare.com');
-    expect(res.headers['access-control-allow-origin']).toBeUndefined();
-    expect(res.status).toBe(500);
+  it('con ALLOW_TUNNEL_ORIGINS=true vuelve a aceptar subdominios de túnel anclados', async () => {
+    process.env.ALLOW_TUNNEL_ORIGINS = 'true';
+    const ok = await get('https://random-words.trycloudflare.com');
+    expect(ok.headers['access-control-allow-origin']).toBe('https://random-words.trycloudflare.com');
+    const bad = await get('https://x.ngrok-evil.com');
+    expect(bad.status).toBe(403);
   });
 
-  it('rechaza un origen completamente ajeno', async () => {
-    const res = await originStatus('https://evil.com');
-    expect(res.headers['access-control-allow-origin']).toBeUndefined();
-    expect(res.status).toBe(500);
-  });
-
-  it('permite requests sin header Origin (mismo origen / curl / apps nativas)', async () => {
-    const res = await request(app).get('/health');
-    expect(res.status).toBe(200);
+  it('permite peticiones sin cabecera Origin (curl, health checks)', async () => {
+    const res = await request(app).get(PATH);
+    expect(res.status).toBe(404);
   });
 });

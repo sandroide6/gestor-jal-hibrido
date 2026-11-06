@@ -39,7 +39,27 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Auditoría 2026-11-05 (P3-5): la precarga bajaba 2,1 MB en la primera visita,
+        // incluido lo que casi nadie usa sin conexión. Fuera de la precarga (se bajan al
+        // usarse y quedan en caché): la página de Reportes (Recharts, solo
+        // administrador/edil y siempre con conexión) y las fuentes en alfabetos que la
+        // app no usa. El bloque `docs` SÍ se precarga: lo necesita el modo sin conexión.
+        globIgnores: [
+          '**/ReportsPage-*.js',
+          '**/sentry-*.js',
+          '**/*-cyrillic*.woff2',
+          '**/*-greek*.woff2',
+          '**/*-vietnamese*.woff2',
+        ],
         runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.startsWith('/assets/'),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'assets-bajo-demanda',
+              expiration: { maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 60 },
+            },
+          },
           {
             // Network-first para llamadas a la API
             urlPattern: ({ url }) => url.pathname.startsWith('/api'),
@@ -91,6 +111,8 @@ export default defineConfig({
           vendor: ['react', 'react-dom', 'react-router-dom'],
           store: ['zustand'],
           docs: ['docxtemplater', 'pizzip', 'pdf-lib', 'docx'],
+          // Solo se descarga si hay VITE_SENTRY_DSN (import dinámico en services/errorTracking)
+          sentry: ['@sentry/browser'],
         },
       },
     },

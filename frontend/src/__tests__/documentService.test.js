@@ -224,3 +224,26 @@ describe('fetchDocTypes', () => {
     await expect(fetchDocTypes('tok')).rejects.toThrow('Prohibido');
   });
 });
+
+describe('generateDocument — idempotencia (auditoría 2026-11-05, P0-2)', () => {
+  it('envía client_local_id en línea y reutiliza ese mismo id si cae a la cola sin conexión', async () => {
+    api.post.mockRejectedValue(new TypeError('Failed to fetch')); // sin status → error de red
+
+    await generateDocument(baseArgs);
+
+    const onlinePayload = api.post.mock.calls[0][1];
+    expect(onlinePayload.client_local_id).toMatch(/^[0-9a-f-]{36}$/);
+
+    const [op, queued] = addToSyncQueue.mock.calls[0];
+    expect(op).toBe('create');
+    expect(queued.localId).toBe(onlinePayload.client_local_id);
+    expect(saveDocument.mock.calls[0][0].id).toBe(onlinePayload.client_local_id);
+  });
+
+  it('cada documento nuevo lleva un identificador distinto', async () => {
+    api.post.mockResolvedValue({ id: 'srv', created_at: '2026-01-01' });
+    await generateDocument(baseArgs);
+    await generateDocument(baseArgs);
+    expect(api.post.mock.calls[0][1].client_local_id).not.toBe(api.post.mock.calls[1][1].client_local_id);
+  });
+});

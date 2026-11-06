@@ -20,6 +20,7 @@ const request = require('supertest');
 const jwt     = require('jsonwebtoken');
 const app     = require('../app');
 const models  = require('../models');
+const { mockActiveSessionUser } = require('./helpers/activeUser');
 const drive   = require('../services/driveBackupService');
 const errorHandler = require('../middleware/errorHandler');
 const { encryptJSON } = require('../utils/crypto');
@@ -28,8 +29,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 const sign = (payload) => jwt.sign(payload, JWT_SECRET, { algorithm: 'HS256', expiresIn: '1h' });
 const adminToken = (jalId) => sign({ sub: 'admin-1', jal_id: jalId, role: 'administrador' });
 
-// authenticate confía en el JWT si la BD no responde (offline tolerance)
-const mockOfflineDb = () => vi.spyOn(models.User, 'findByPk').mockRejectedValue(new Error('test-db-offline'));
+// Sesión simulada sin base: authenticate recibe un usuario activo (helpers/activeUser.js)
+const mockOfflineDb = () => mockActiveSessionUser();
 
 afterEach(() => vi.restoreAllMocks());
 afterAll(() => fs.rmSync(TMP_BACKUPS_DIR, { recursive: true, force: true }));

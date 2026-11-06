@@ -269,7 +269,19 @@ BottomNav.propTypes = {
  * - `header={false}` cuando la página dibuja su propio encabezado.
  */
 export default function AppLayout({ children, title, heading, eyebrow, description, actions, header = true, width = 'page' }) {
-  const { user, logout, hasRole } = useAuthStore();
+  const { user, logout, hasRole, setUser } = useAuthStore();
+  const mustChangePassword = !!user?.must_change_password;
+
+  // El backend responde 403 PASSWORD_CHANGE_REQUIRED si la contraseña es inicial (por
+  // ejemplo, un usuario guardado en caché antes de que se exigiera el cambio).
+  useEffect(() => {
+    const onRequired = () => {
+      const current = useAuthStore.getState().user;
+      if (current && !current.must_change_password) setUser({ ...current, must_change_password: true });
+    };
+    window.addEventListener('jal:password-change-required', onRequired);
+    return () => window.removeEventListener('jal:password-change-required', onRequired);
+  }, [setUser]);
   const location = useLocation();
   const navigate = useNavigate();
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -304,7 +316,14 @@ export default function AppLayout({ children, title, heading, eyebrow, descripti
       <a href="#contenido" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[70] focus:rounded-md focus:bg-surface focus:px-4 focus:py-3 focus:font-semibold focus:text-brand focus:shadow-float">
         Saltar al contenido
       </a>
-      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
+      {showChangePassword && !mustChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
+      {mustChangePassword && (
+        <ChangePasswordModal
+          forced
+          onClose={() => {}}
+          onChanged={() => setUser({ ...useAuthStore.getState().user, must_change_password: false })}
+        />
+      )}
 
       {/* Lomo verde (escritorio) */}
       <aside className={`fixed inset-y-0 left-0 z-30 hidden flex-col bg-brand pt-6 pb-4 lg:flex ${sidebarOpen ? 'w-64' : 'w-[4.5rem]'}`}>

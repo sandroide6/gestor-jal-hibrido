@@ -2,8 +2,19 @@
 const { verifyToken } = require('../services/authService');
 const { User } = require('../models');
 const E = require('../config/errorCodes');
+const { tokenIssuedBefore } = require('../utils/tokenRevocation');
 
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+// Con must_change_password=true (contraseña inicial o asignada por un administrador)
+// solo se permite esto hasta que el usuario elija su propia contraseña.
+const ALLOWED_WHILE_PASSWORD_CHANGE = new Set([
+  'PATCH /v1/auth/change-password',
+  'POST /v1/auth/logout',
+  'POST /v1/auth/logout-all',
+  'POST /v1/auth/consent',
+  'GET /v1/users/me',
+]);
 
 // Prioriza un header Authorization explícito (clientes que gestionan su propio token,
 // ej. un futuro cliente móvil o scripts) sobre la cookie httpOnly (flujo normal del
@@ -65,7 +76,7 @@ async function authenticate(req, res, next) {
   // Verificar que el usuario sigue activo y el token no fue invalidado
   try {
     const user = await User.findByPk(payload.sub, {
-      attributes: ['id', 'active', 'tokens_invalid_before'],
+      attributes: ['id', 'active', 'tokens_invalid_before', 'must_change_password'],
     });
 
     if (!user || !user.active) {
@@ -74,13 +85,30 @@ async function authenticate(req, res, next) {
 
     // Token emitido antes de la fecha de invalidación → rechazar
     if (user.tokens_invalid_before) {
-      const issuedAt = new Date((payload.iat || 0) * 1000);
-      if (issuedAt < new Date(user.tokens_invalid_before)) {
+      // iat va en segundos enteros (JWT): se compara en segundos. Comparar en
+      // milisegundos revocaba también los tokens emitidos en el MISMO segundo que el
+      // cambio, como los que se reemiten justo al cambiar la contraseña.
+      if (tokenIssuedBefore(payload, user.tokens_invalid_before)) {
         return res.status(401).json({ error: true, code: E.AUTH_TOKEN_REVOKED, message: 'Sesión expirada. Inicie sesión nuevamente.' });
       }
     }
-  } catch {
-    // Si la BD no está disponible, confiar en el token (offline tolerance)
+
+    if (user.must_change_password) {
+      const route = `${req.method} ${(req.baseUrl + req.path).replace(/\/$/, '')}`;
+      if (!ALLOWED_WHILE_PASSWORD_CHANGE.has(route)) {
+        return res.status(403).json({
+          error: true,
+          code: E.PASSWORD_CHANGE_REQUIRED,
+          message: 'Debes cambiar tu contraseña antes de continuar.',
+        });
+      }
+    }
+  } catch (err) {
+    // Auditoría 2026-11-05 (P2-3): antes se confiaba en el token si la base no respondía,
+    // lo que dejaba pasar a usuarios desactivados, sesiones revocadas y contraseñas
+    // pendientes de cambio. Ahora falla cerrado: errorHandler responde 503 DB_UNAVAILABLE
+    // (con Retry-After) si es un error de conexión, o 500 si es otro.
+    return next(err);
   }
 
   req.user = payload;

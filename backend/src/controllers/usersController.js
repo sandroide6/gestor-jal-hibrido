@@ -65,6 +65,22 @@ async function update(req, res, next) {
       updates.active = true;
     }
 
+    // El rol y el correo viajan dentro del access token (8 h). Sin revocar, un usuario
+    // degradado seguía con los permisos anteriores hasta que el token expiraba
+    // (auditoría 2026-11-05, P1-1). Al revocar, su próxima petición pide iniciar sesión.
+    const roleChanged  = role  !== undefined && role  !== user.role;
+    const emailChanged = email !== undefined && email !== user.email;
+    if (roleChanged || emailChanged) {
+      updates.tokens_invalid_before = new Date();
+    }
+
+    // Nunca dejar la JAL sin ningún administrador activo (auditoría 2026-11-05, P3-3)
+    const losesAdmin = user.role === 'administrador'
+      && ((roleChanged && role !== 'administrador') || updates.active === false);
+    if (losesAdmin && await users.countActiveAdmins(req.user.jal_id) <= 1) {
+      return res.status(400).json({ error: true, message: 'La JAL debe conservar al menos un administrador activo' });
+    }
+
     await users.updateUser(user, updates);
 
     await audit.log({

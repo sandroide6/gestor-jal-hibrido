@@ -50,3 +50,157 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  # Ensayo del respaldo y la restauración en cada PR, con PostgreSQL 17 (la versión de
+  # Supabase): migra y siembra una base, la respalda con deploy/backup/respaldar.sh y la
+  # restaura en otra base vacía comparando filas (auditoría 2026-11-05, P0-1).
+  respaldo:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGPASSWORD: postgres
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/origen
+      BACKUP_PASSPHRASE: frase-solo-para-el-ensayo-de-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Cliente PostgreSQL 17
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+      - name: Crear bases de origen y de verificación
+        run: |
+          psql -h localhost -U postgres -c 'CREATE DATABASE origen' -c 'CREATE DATABASE verificacion'
+      - name: Migrar y sembrar el origen (prueba también las migraciones en PostgreSQL 17)
+        working-directory: backend
+        run: npm ci && npx sequelize-cli db:migrate && npx sequelize-cli db:seed:all
+      - run: deploy/backup/respaldar.sh respaldos
+      - name: Restaurar y verificar
+        env:
+          TARGET_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/verificacion
+        run: deploy/backup/restaurar.sh respaldos/*.dump.gpg --confirmar
+
+  # Construye la imagen de Render y la prueba de verdad: migraciones al arrancar, seeder,
+  # cambio obligatorio de contraseña y un documento con PDF hecho por LibreOffice
+  # dentro de la imagen (auditoría 2026-11-05, P2-5).
+  imagen-render:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Construir la imagen de Render
+        run: docker build -f deploy/render/Dockerfile.backend -t gestor-render:ci .
+      - name: Prueba de humo de la imagen
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: deploy/render/prueba-imagen.sh gestor-render:ci
+
+  # Imagen de staging (auditoría 2026-11-05, plan 4.2): backend + frontend en un solo
+  # servicio. Misma prueba de humo que la de Render y, además, que sirva el frontend.
+  imagen-staging:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Construir la imagen de staging
+        run: docker build -f deploy/staging/Dockerfile -t gestor-staging:ci .
+      - name: Prueba de humo de la imagen
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          CON_FRONTEND: '1'
+        run: deploy/render/prueba-imagen.sh gestor-staging:ci
+
+  # Prueba de extremo a extremo en Chromium (auditoría 2026-11-05, fase 6): el
+  # administrador sembrado entra con la contraseña inicial, se le obliga a cambiarla,
+  # crea un Certificado de Residencia con la plantilla oficial y descarga el PDF.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gestor_jal_e2e
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/gestor_jal_e2e
+      E2E_ADMIN_PASSWORD: Inicial-CI-E2E-2026!
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: LibreOffice (conversión DOCX → PDF)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer
+      - name: Backend
+        working-directory: backend
+        run: |
+          npm ci
+          npx sequelize-cli db:migrate
+          NODE_ENV=production ADMIN_INITIAL_PASSWORD="$E2E_ADMIN_PASSWORD" npx sequelize-cli db:seed:all
+          PORT=3001 NODE_ENV=development ALLOWED_ORIGINS=http://localhost:4173 nohup node src/index.js > ../backend-e2e.log 2>&1 &
+      - name: Frontend compilado
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          nohup npx vite preview --port 4173 --strictPort > ../preview-e2e.log 2>&1 &
+      - name: Navegador
+        working-directory: e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Esperar servicios
+        run: |
+          for i in $(seq 1 30); do curl -sf http://localhost:3001/health/live && curl -sf -o /dev/null http://localhost:4173/login && exit 0; sleep 2; done
+          cat backend-e2e.log preview-e2e.log; exit 1
+      - name: Flujo principal
+        working-directory: e2e
+        env:
+          E2E_CAPTURAS: ${{ github.workspace }}/e2e-capturas
+        run: node flujo-principal.mjs
+      - name: Capturas y registros
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-capturas
+          path: |
+            e2e-capturas
+            backend-e2e.log
+          retention-days: 7

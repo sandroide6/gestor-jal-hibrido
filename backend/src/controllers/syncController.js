@@ -11,6 +11,7 @@ async function batch(req, res, next) {
       operations: req.body.operations,
       userId: req.user.sub,
       jalId: req.user.jal_id,
+      role: req.user.role,
       ip: getIp(req),
     });
 

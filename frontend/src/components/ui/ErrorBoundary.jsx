@@ -1,6 +1,7 @@
 import PropTypes from 'prop-types';
 import { Component } from 'react';
 import Icon from './Icon';
+import { captureError } from '../../services/errorTracking';
 
 export default class ErrorBoundary extends Component {
   state = { hasError: false };
@@ -11,6 +12,7 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     console.error('[JAL] Error no capturado:', error, info.componentStack);
+    captureError(error, { origen: 'ErrorBoundary' });
   }
 
   render() {

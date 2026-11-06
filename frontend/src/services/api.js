@@ -93,6 +93,9 @@ async function request(path, options = {}) {
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    if (res.status === 403 && data.code === 'PASSWORD_CHANGE_REQUIRED' && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('jal:password-change-required'));
+    }
     const err = new Error(data.message || `HTTP ${res.status}`);
     err.status = res.status;
     err.data = data;

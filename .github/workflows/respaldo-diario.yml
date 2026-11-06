@@ -1,0 +1,105 @@
+# Respaldo diario de la base de datos de producción, con restauración de prueba
+# (auditoría de producción 2026-11-05, P0-1).
+#
+# Cada día:
+#   1. pg_dump del esquema public de Supabase, cifrado con AES256 (deploy/backup/respaldar.sh).
+#   2. Lo restaura en un PostgreSQL 17 vacío de este mismo job y compara filas por tabla
+#      (deploy/backup/restaurar.sh). Si la restauración no cuadra, el job falla.
+#   3. Guarda el respaldo cifrado como artefacto durante 30 días.
+# Si algo falla, GitHub envía un correo de "workflow failed" y, si está configurado,
+# se avisa también al webhook ALERT_WEBHOOK_URL.
+#
+# Secretos que hay que crear en GitHub (Settings → Secrets and variables → Actions):
+#   SUPABASE_DB_URL     cadena del Session pooler de Supabase (la misma DATABASE_URL de Render)
+#   BACKUP_PASSPHRASE   frase larga para cifrar; guárdala también FUERA de GitHub
+#   ALERT_WEBHOOK_URL   (opcional) webhook de Slack/Discord/ntfy para avisar fallos
+name: Respaldo diario
+
+on:
+  schedule:
+    - cron: '30 7 * * *' # 02:30 en Colombia (UTC-5)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: respaldo-diario
+  cancel-in-progress: false
+
+jobs:
+  respaldo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      verificacion:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: verificacion
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar que los secretos existen
+        run: |
+          [ -n "$DATABASE_URL" ] || { echo "::error::Falta el secreto SUPABASE_DB_URL"; exit 1; }
+          [ -n "$BACKUP_PASSPHRASE" ] || { echo "::error::Falta el secreto BACKUP_PASSPHRASE"; exit 1; }
+
+      - name: Instalar cliente PostgreSQL 17 (misma versión que Supabase)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y > /dev/null
+          sudo apt-get install -y -qq postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+
+      - name: Respaldar (pg_dump cifrado)
+        run: deploy/backup/respaldar.sh respaldos
+
+      - name: Restaurar en una base vacía y verificar conteos
+        env:
+          TARGET_DATABASE_URL: postgresql://postgres:verificacion@localhost:5433/postgres
+        run: deploy/backup/restaurar.sh respaldos/*.dump.gpg --confirmar
+
+      # Supabase Free admite 500 MB; por encima pasa la base a solo lectura (auditoría
+      # 2026-11-05, P1-2). Aviso al superar DB_SIZE_ALERT_MB (variable del repositorio,
+      # por defecto 350 MB = 70 %).
+      - name: Comprobar el tamaño de la base
+        env:
+          LIMITE_MB: ${{ vars.DB_SIZE_ALERT_MB || '350' }}
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: |
+          mb=$(psql "$DATABASE_URL" -X -A -t -c "SELECT round(pg_database_size(current_database())/1048576.0)")
+          echo "Tamaño de la base: ${mb} MB (aviso a partir de ${LIMITE_MB} MB)"
+          echo "### Tamaño de la base: ${mb} MB" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$mb" -ge "$LIMITE_MB" ]; then
+            echo "::warning::La base ocupa ${mb} MB; el plan gratuito de Supabase admite 500 MB"
+            msg="Gestor JAL: la base ocupa ${mb} MB (aviso desde ${LIMITE_MB} MB; el plan gratis admite 500 MB)"
+            if [ -n "$ALERT_WEBHOOK_URL" ]; then
+              if echo "$ALERT_WEBHOOK_URL" | grep -q 'ntfy.sh/'; then curl -s -m 20 -d "$msg" "$ALERT_WEBHOOK_URL" || true
+              else curl -s -m 20 -H 'Content-Type: application/json' -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$ALERT_WEBHOOK_URL" || true; fi
+            fi
+          fi
+
+      - name: Guardar respaldo cifrado (30 días)
+        uses: actions/upload-artifact@v4
+        with:
+          name: respaldo-${{ github.run_id }}
+          path: respaldos/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Avisar si falló
+        if: failure()
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: |
+          [ -z "$ALERT_WEBHOOK_URL" ] && exit 0
+          msg="Gestor JAL: falló el respaldo diario. ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if echo "$ALERT_WEBHOOK_URL" | grep -q 'ntfy.sh/'; then curl -s -m 20 -H 'Priority: high' -d "$msg" "$ALERT_WEBHOOK_URL" || true
+          else curl -s -m 20 -H 'Content-Type: application/json' -d "{\"text\":\"$msg\",\"content\":\"$msg\"}" "$ALERT_WEBHOOK_URL" || true; fi

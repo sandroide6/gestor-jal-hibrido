@@ -5,6 +5,43 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es/1.0.0/).
 
 ---
 
+## [Sin publicar] — 2026-11-05 · Correcciones de la auditoría de producción
+
+Detalle, comandos y evidencias antes/después de cada punto en `auditoria/CORRECCIONES_2026-11.md` (carpeta de entrega del proyecto).
+
+### Corregido
+- **Radicados duplicados por la sincronización sin conexión (P0-2):** cada documento lleva un `client_local_id` generado en el navegador; crear dos veces con el mismo id devuelve el documento existente (también si dos peticiones llegan a la vez). La cola sin conexión ahora pasa por el mismo `createDocument` que el modo en línea. Migración `20260101000027`
+- La revocación de sesiones comparaba milisegundos con segundos: un token emitido en el mismo segundo de un cambio de contraseña quedaba revocado (`utils/tokenRevocation.js`)
+- El respaldo automático a Drive ya no se queda «en curso» para siempre si el proceso muere a mitad (caduca a las 2 h)
+- Tras el cambio obligatorio de contraseña, la página vuelve a cargar sus datos en vez de quedarse con los errores de las peticiones bloqueadas (encontrado por la prueba E2E)
+
+### Seguridad
+- CORS: los orígenes de túneles (ngrok, Cloudflare, Tailscale) ya no se aceptan por defecto (`ALLOW_TUNNEL_ORIGINS`); las peticiones del mismo origen se aceptan sin lista
+- Cookies de sesión con `SameSite=Lax` por defecto (`COOKIE_SAMESITE`)
+- **Contraseña inicial obligatoria de cambiar:** los usuarios con la contraseña de ejemplo o recién creados por el administrador deben cambiarla antes de usar la API (403 `PASSWORD_CHANGE_REQUIRED`). El seeder se niega a correr en producción sin `ADMIN_INITIAL_PASSWORD`. Migración `20260101000028`
+- Cambiar el rol o el correo de un usuario cierra sus sesiones; no se puede quitar el último administrador activo
+- TLS verificado hacia la base con `DB_SSL_CA` o `DB_SSL_VERIFY`
+- Las respuestas de error 4xx ya no incluyen la traza fuera de producción
+- Con la base caída, `authenticate` ya no confía en el token (dejaba pasar a usuarios desactivados, sesiones revocadas y contraseñas pendientes de cambio): responde 503 `DB_UNAVAILABLE`
+- Dependabot mensual para backend, frontend y GitHub Actions
+- joi 17.13.9 y multer 2.x. Quedan 5 avisos moderados solo de desarrollo (sequelize-cli → js-beautify), aceptados y documentados
+
+### Agregado
+- **Respaldo diario cifrado y verificado** de Supabase (`deploy/backup/`, workflow «Respaldo diario»): pg_dump cifrado, restauración de prueba con comparación de filas, alerta de tamaño de la base y aviso si falla
+- Avisos por webhook (`ALERT_WEBHOOK_URL`: ntfy.sh, Slack o Discord) para errores 5xx, base caída y caídas del proceso, sin datos personales
+- Monitor externo cada 10 minutos (workflow «Monitor y keepalive») que avisa tras 3 fallos seguidos
+- `/health/live` (sin base) para el health check de Render
+- Migraciones automáticas al arrancar en Render (`RUN_MIGRATIONS`)
+- CI: ensayo de respaldo y restauración con PostgreSQL 17, prueba de humo de la imagen Docker de Render (incluido un PDF generado por LibreOffice) y prueba E2E en Chromium del flujo principal (`e2e/flujo-principal.mjs`)
+- [Runbook de incidentes](docs/07_OPERACION/RUNBOOK_INCIDENTES.md)
+
+### Cambiado
+- Base caída → 503 `DB_UNAVAILABLE` con `Retry-After` en lugar de 500
+- Conversiones DOCX→PDF en cola (`LIBREOFFICE_MAX_CONCURRENCY`, 1 por defecto) para no agotar la RAM de Render
+- Límite de peticiones por usuario autenticado (`RATE_LIMIT_PER_MIN`, 300) en vez de por IP: una oficina detrás de una sola IP ya no se bloquea entera
+- Errores no controlados (`unhandledRejection`, `uncaughtException`) se registran, avisan y reinician el proceso con código 1
+- Service worker: precarga de 2,1 MB a 1,6 MB (reportes y alfabetos no latinos se cargan al usarlos)
+
 ## [Sin publicar] — 2026-10-29
 
 ### Cambiado

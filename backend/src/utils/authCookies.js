@@ -9,6 +9,18 @@ function isHttps(req) {
   return req.secure || req.headers['x-forwarded-proto'] === 'https';
 }
 
+const VALID_SAMESITE = new Set(['lax', 'strict', 'none']);
+
+// Auditoría 2026-11-05 (P0-3): con HTTPS se usaba SameSite=None. El frontend en Vercel
+// llama a la API por el reenvío /v1 (mismo origen), así que Lax basta y evita que el
+// navegador adjunte la sesión a peticiones iniciadas desde otros sitios. Si algún día
+// el frontend llama al backend en otro dominio, COOKIE_SAMESITE=none (solo con HTTPS).
+function sameSitePolicy(secure) {
+  if (!secure) return 'strict';
+  const wanted = (process.env.COOKIE_SAMESITE || '').toLowerCase();
+  return VALID_SAMESITE.has(wanted) ? wanted : 'lax';
+}
+
 function generateCsrfToken() {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -20,7 +32,7 @@ function generateCsrfToken() {
 // con 2FA activado.
 function setAuthCookies(req, res, { accessToken, refreshToken, rememberMe = false }) {
   const secure = isHttps(req);
-  const sameSite = secure ? 'none' : 'strict';
+  const sameSite = sameSitePolicy(secure);
   const sessionMaxAge = rememberMe ? { maxAge: ACCESS_TOKEN_MAX_AGE } : {};
   const refreshMaxAge = rememberMe ? { maxAge: REFRESH_TOKEN_MAX_AGE } : {};
 
@@ -47,7 +59,7 @@ function setAuthCookies(req, res, { accessToken, refreshToken, rememberMe = fals
 
 function clearAuthCookies(req, res) {
   const secure = isHttps(req);
-  const sameSite = secure ? 'none' : 'strict';
+  const sameSite = sameSitePolicy(secure);
   res.clearCookie('access_token',  { path: '/', secure, sameSite });
   res.clearCookie('refresh_token', { path: '/v1/auth/refresh', secure, sameSite });
   res.clearCookie('csrf_token',    { path: '/', secure, sameSite });

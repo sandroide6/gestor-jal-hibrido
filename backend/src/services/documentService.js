@@ -1,5 +1,6 @@
 'use strict';
 const { v4: uuidv4 } = require('uuid');
+const errorTracking = require('./errorTracking');
 const { Op } = require('sequelize');
 const { DocType, Document, Jal, User } = require('../models');
 const E = require('../config/errorCodes');
@@ -29,12 +30,46 @@ const CARGO_MAP = {
  * Crea un documento: valida tipo, campos, firma, genera archivos y persiste en BD.
  * Lanza errores con `.status` para que el errorHandler los serialice correctamente.
  */
-async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName, beneficiaryId, formFields, uploadedSignature, ip, edilId }) {
+// Busca un documento ya creado con el mismo identificador del cliente. Pertenecer a
+// otro usuario de la JAL con el mismo id solo puede ser un error o un intento de leer
+// un documento ajeno: se rechaza sin revelar nada.
+async function findByClientLocalId({ jalId, userId, clientLocalId }) {
+  if (!clientLocalId) return null;
+  const existing = await Document.findOne({
+    where: { jal_id: jalId, client_local_id: clientLocalId },
+    attributes: { exclude: ['file_docx', 'file_pdf'] },
+  });
+  if (existing && existing.user_id !== userId) {
+    throw Object.assign(new Error('Identificador de documento en uso'), { status: 409, code: E.CONFLICT });
+  }
+  return existing;
+}
+
+function isUniqueClientIdViolation(err) {
+  return err?.name === 'SequelizeUniqueConstraintError'
+    && JSON.stringify(err.fields || err.errors || '').includes('client_local_id');
+}
+
+/**
+ * Crea un documento: valida tipo, campos, firma, genera archivos y persiste en BD.
+ * Lanza errores con `.status` para que el errorHandler los serialice correctamente.
+ *
+ * `clientLocalId` (opcional) hace la operación idempotente: si ya existe un documento
+ * con ese identificador en la JAL, se devuelve ese documento con `duplicate: true` en
+ * vez de crear otro con otro radicado. Lo usan la ruta en línea (reintentos) y la
+ * sincronización sin conexión, que desde la auditoría 2026-11-05 pasa por aquí.
+ */
+async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName, beneficiaryId, formFields, uploadedSignature, ip, edilId, clientLocalId = null }) {
+  const previous = await findByClientLocalId({ jalId, userId, clientLocalId });
+  if (previous) {
+    return { doc: previous, docType: { id: previous.doc_type_id, name: previous.doc_type_name }, duplicate: true };
+  }
+
   const docType = await DocType.findOne({
     where: { id: docTypeId, jal_id: jalId, active: true },
   });
   if (!docType) {
-    throw Object.assign(new Error('Tipo de documento no encontrado o inactivo'), { status: 404 });
+    throw Object.assign(new Error('Tipo de documento no encontrado o inactivo'), { status: 404, code: 'DOC_TYPE_NOT_FOUND' });
   }
 
   const missingFields = (docType.fields || [])
@@ -136,11 +171,15 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
   let docxBuffer;
   let pdfBuffer;
 
-  // El radicado se reclama, el archivo se genera y el documento se inserta dentro de la
-  // MISMA transacción: si la generación del DOCX/PDF o el INSERT fallan, la transacción
-  // se revierte completa y el consecutivo reclamado queda libre para el siguiente intento
-  // (sin huecos ni duplicados). Como contrapartida, dos generaciones concurrentes del mismo
-  // jal_id + año + tipo_tramite se serializan mientras dure la generación de archivos.
+  // El radicado se reclama, el DOCX se arma y el documento se inserta dentro de la MISMA
+  // transacción: si algo falla, se revierte completa y el consecutivo queda libre para el
+  // siguiente intento (sin huecos ni duplicados). El PDF (LibreOffice, segundos) se genera
+  // DESPUÉS de confirmar (auditoría 2026-11-05, P2-2): antes se hacía dentro y el contador
+  // del mismo jal_id + año + tipo_tramite quedaba bloqueado durante toda la conversión.
+  // Si la conversión fallara, el documento ya existe con su DOCX y la descarga del PDF lo
+  // genera en ese momento (documentController.download).
+  let prepared;
+  try {
   await Document.sequelize.transaction(async (t) => {
     numeroRadicado = await radicadoService.assignNumeroRadicado({
       jalId,
@@ -149,8 +188,7 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
     });
     templateData.numero_radicado = numeroRadicado;
 
-    let docxPath, pdfPath;
-    ({ docxPath, pdfPath, docxBuffer, pdfBuffer } = await getDocumentGeneratorService().generateDocuments({
+    prepared = await getDocumentGeneratorService().generateDocx({
       jalId,
       jalName: jal.name,
       docType: {
@@ -164,7 +202,8 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       signaturePath,
       signatureBuffer,
       signatureMime,
-    }));
+    });
+    ({ docxBuffer } = prepared);
 
     const documentNumber = await documentNumberService.assignDocumentNumber({ jalId, transaction: t });
 
@@ -178,19 +217,41 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
       beneficiary_name: beneficiaryName,
       beneficiary_id: beneficiaryId,
       metadata: templateData,
-      file_path_docx: docxPath,
-      file_path_pdf: pdfPath,
+      file_path_docx: prepared.docxPath,
+      file_path_pdf: null, // se completa al generar el PDF, fuera de la transacción
       // Copia además en Postgres (no solo en disco): el disco del backend en Render
       // (free tier) es efímero, mientras que la BD sigue centralizada en el PC local
       // vía el túnel Tailscale. El disco se conserva como caché rápida cuando existe.
       file_docx: docxBuffer,
-      file_pdf: pdfBuffer,
+      file_pdf: null,
       sync_status: 'synced',
       document_number: documentNumber,
       numero_radicado: numeroRadicado,
       tipo_tramite: docType.tipo_tramite,
+      client_local_id: clientLocalId || null,
     }, { transaction: t });
   });
+  } catch (err) {
+    // Dos envíos simultáneos con el mismo identificador: el segundo choca con el índice
+    // único, su transacción se revierte (el radicado queda libre) y devuelve el primero.
+    if (clientLocalId && isUniqueClientIdViolation(err)) {
+      const winner = await findByClientLocalId({ jalId, userId, clientLocalId });
+      if (winner) return { doc: winner, docType: { id: winner.doc_type_id, name: winner.doc_type_name }, duplicate: true };
+    }
+    throw err;
+  }
+
+  try {
+    pdfBuffer = await getDocumentGeneratorService().generatePdfFor(prepared);
+    await doc.update({ file_pdf: pdfBuffer, file_path_pdf: prepared.pdfPath });
+  } catch (err) {
+    // El documento y su radicado ya son válidos: se registra y el PDF se generará al
+    // descargarlo. No se revierte (eso dejaría un hueco en la numeración oficial).
+    logger.error('documentService: no se pudo generar el PDF; se generará al descargar', {
+      documentId: doc.id, error: err.message,
+    });
+    errorTracking.captureError(err, { path: 'createDocument:pdf' });
+  }
 
   // Fire-and-forget: si la JAL tiene Drive conectado, sube el DOCX/PDF ya generado.
   // No se espera (`await`) ni se propaga su error — no debe retrasar ni tumbar la
@@ -223,7 +284,7 @@ async function createDocument({ jalId, userId, role, docTypeId, beneficiaryName,
     metadata: { doc_type: docType.name, beneficiary_id: beneficiaryId, numero_radicado: numeroRadicado },
   });
 
-  return { doc, docType };
+  return { doc, docType, duplicate: false };
 }
 
 // ── Queries de lectura ────────────────────────────────────

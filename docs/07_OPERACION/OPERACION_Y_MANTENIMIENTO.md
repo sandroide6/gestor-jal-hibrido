@@ -34,7 +34,7 @@ R = ejecuta · A = aprueba y responde · C = consultado · I = informado.
 
 | Frecuencia | Tarea | Responsable |
 |---|---|---|
-| Diaria | Comprobar que el respaldo se generó | Resp. técnico |
+| Diaria | Comprobar que el workflow «Respaldo diario» está en verde (avisa solo si falla) | Resp. técnico |
 | Semanal | Revisar errores en el registro de la plataforma; revisar pendientes de revisión | Resp. técnico; ediles |
 | Mensual | `npm audit` en backend y frontend; revisar usuarios activos y auditoría; copia fuera de línea | Resp. técnico; admin. funcional |
 | Trimestral | Ensayo de restauración; revisar espacio de la base (los archivos crecen dentro de ella) | Resp. técnico |
@@ -49,6 +49,8 @@ R = ejecuta · A = aprueba y responde · C = consultado · I = informado.
 | Alta | No se generan PDF; un rol no puede trabajar | 1 día hábil |
 | Media | Error en una plantilla; lentitud | 3 días hábiles |
 | Baja | Mejora o texto | Siguiente versión |
+
+Pasos concretos por tipo de incidente (Supabase pausado, Render caído, límite de 500 MB, restauración, rotación de secretos, vuelta atrás): [Runbook de incidentes](RUNBOOK_INCIDENTES.md).
 
 **Pasos:** registrar (fecha, quién reporta, síntoma, `requestId` si aparece en el error) → contener (desactivar usuario, detener servicio, cambiar claves) → diagnosticar ([Diagnóstico](../06_DESPLIEGUE/INSTALACION_Y_DESPLIEGUE.md#8-diagnóstico)) → resolver → verificar → cerrar con lección aprendida.
 
@@ -68,7 +70,7 @@ R = ejecuta · A = aprueba y responde · C = consultado · I = informado.
 
 ## 6. Mantenimiento del código
 
-- Pruebas: `npm test` en `backend/` (necesita PostgreSQL de pruebas) y `frontend/`; `npm run lint`; CI en GitHub Actions corre lo mismo en cada PR.
+- Pruebas: `npm test` en `backend/` (necesita PostgreSQL de pruebas) y `frontend/`; `npm run lint`; la CI en GitHub Actions corre lo mismo en cada PR, más el ensayo de respaldo y restauración, la prueba de la imagen de Render y la prueba E2E en navegador (`e2e/flujo-principal.mjs`).
 - Antes de cada versión: pruebas, lint, build, migraciones en una copia de la base, prueba de humo.
 - Registrar cambios en `CHANGELOG.md`.
 - Deuda técnica conocida: ver la sección 7 del [Estado real](../00_LEEME/ESTADO_REAL_DEL_PROYECTO.md#7-mantenimiento-y-deuda-técnica).

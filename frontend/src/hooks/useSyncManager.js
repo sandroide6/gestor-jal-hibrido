@@ -92,7 +92,7 @@ async function runSync({ onProgress }) {
 // Hook que dispara sync automáticamente al volver la conexión
 export function useSyncManager() {
   const { isAuthenticated } = useAuthStore();
-  const { isOnline, setOnline, setPendingCount, isSyncing } = useSyncStore();
+  const { isOnline, setOnline, setPendingCount } = useSyncStore();
   const syncProgress = useRef(null);
   const isSyncingRef = useRef(false);
 
