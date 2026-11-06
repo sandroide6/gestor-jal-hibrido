@@ -46,6 +46,7 @@ export default defineConfig({
         // app no usa. El bloque `docs` SÍ se precarga: lo necesita el modo sin conexión.
         globIgnores: [
           '**/ReportsPage-*.js',
+          '**/sentry-*.js',
           '**/*-cyrillic*.woff2',
           '**/*-greek*.woff2',
           '**/*-vietnamese*.woff2',
@@ -110,6 +111,8 @@ export default defineConfig({
           vendor: ['react', 'react-dom', 'react-router-dom'],
           store: ['zustand'],
           docs: ['docxtemplater', 'pizzip', 'pdf-lib', 'docx'],
+          // Solo se descarga si hay VITE_SENTRY_DSN (import dinámico en services/errorTracking)
+          sentry: ['@sentry/browser'],
         },
       },
     },

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import AppLayout from '../components/ui/AppLayout';
 import { useAuthStore } from '../stores/authStore';
@@ -31,14 +31,14 @@ export default function ProfilePage() {
     formState: { errors, isSubmitting, isDirty },
   } = useForm({ defaultValues: { name: '', email: '', cargo_titulo: '' } });
 
-  async function loadFirma() {
+  const loadFirma = useCallback(async () => {
     try {
       const { data_url } = await api.get('/users/me/firma', { token });
       setFirmaUrl(data_url);
     } catch (err) {
       if (err?.status !== 404) console.error('[Firma] Error al cargar:', err?.message || err);
     }
-  }
+  }, [token]);
 
   useEffect(() => {
     getProfile(token)
@@ -49,7 +49,9 @@ export default function ProfilePage() {
       })
       .catch(() => setMsg({ type: 'err', text: 'No se pudo cargar el perfil' }))
       .finally(() => setLoading(false));
-  }, [token]);
+    // reset es estable (react-hook-form) y loadFirma solo cambia con el token: el efecto
+    // sigue corriendo una vez por sesión, como antes.
+  }, [token, reset, loadFirma]);
 
   function flash(type, text) {
     setMsg({ type, text });

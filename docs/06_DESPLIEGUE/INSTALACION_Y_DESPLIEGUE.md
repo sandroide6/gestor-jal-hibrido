@@ -96,6 +96,7 @@ Resumen; el paso a paso está en [DESPLIEGUE_HIBRIDO.md](../DESPLIEGUE_HIBRIDO.m
 | `RUN_MIGRATIONS` | No | `true` en la imagen de Render: aplica las migraciones pendientes al arrancar |
 | `ALERT_WEBHOOK_URL` | Recomendada | Webhook de ntfy.sh, Slack o Discord para avisos de errores 5xx, base caída y caídas del proceso. Sin datos personales |
 | `ALERT_THROTTLE_MIN` | No | Minutos mínimos entre avisos del mismo tipo. Por defecto 15 |
+| `SENTRY_DSN`, `SENTRY_ENVIRONMENT` | No | Registro de errores 5xx y caídas en Sentry. Sin DSN queda inactivo. Se envían tipo, traza, ruta sin parámetros y `requestId`; cédulas y correos se tapan |
 | `PORT` | No | 3001 por defecto en el ejemplo |
 | `ADMIN_INITIAL_PASSWORD` | Sí en producción para sembrar | Contraseña inicial del administrador que crea el seeder; el seeder se niega a correr en producción sin ella. Hay que cambiarla al primer ingreso |
 | `TRUST_PROXY_HOPS` | Detrás de proxy | Por defecto 1 |
@@ -106,7 +107,7 @@ Resumen; el paso a paso está en [DESPLIEGUE_HIBRIDO.md](../DESPLIEGUE_HIBRIDO.m
 | `LOCAL_DOC_RECEIVER_URL`, `LOCAL_DOC_RECEIVER_TOKEN` | Solo para el receptor local | |
 | `LOG_SQL` | No | Depuración |
 
-No las lee el backend (ver D6 y D7 del [Estado real](../00_LEEME/ESTADO_REAL_DEL_PROYECTO.md)): `JAL_NOMBRE`, `JAL_NOMBRE_CORTO`, `VAPID_*`. Frontend: `VITE_API_URL` (normalmente `/v1`) y `VITE_JAL_NOMBRE`.
+No las lee el backend (ver D6 y D7 del [Estado real](../00_LEEME/ESTADO_REAL_DEL_PROYECTO.md)): `JAL_NOMBRE`, `JAL_NOMBRE_CORTO`, `VAPID_*`. Frontend: `VITE_API_URL` (normalmente `/v1`), `VITE_JAL_NOMBRE` y, opcional, `VITE_SENTRY_DSN` / `VITE_SENTRY_ENVIRONMENT` (el SDK solo se descarga si hay DSN).
 
 **Nunca** subir `.env` al repositorio (está en `.gitignore`) ni enviar estos valores por correo o chat.
 

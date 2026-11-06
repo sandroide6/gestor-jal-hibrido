@@ -7,6 +7,10 @@ import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 import { useAuthStore } from './stores/authStore';
 import { useSyncStore } from './stores/syncStore';
+import { initErrorTracking } from './services/errorTracking';
+
+// Sentry solo si hay VITE_SENTRY_DSN (se descarga aparte, no frena el arranque)
+initErrorTracking().catch(() => {});
 
 // Registrar SW con notificación de actualización vía custom event
 const updateSW = registerSW({

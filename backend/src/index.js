@@ -1,4 +1,7 @@
 'use strict';
+// Sentry se inicia antes de cargar Express para que pueda instrumentarlo (si hay SENTRY_DSN)
+const errorTracking = require('./services/errorTracking');
+errorTracking.init();
 const logger = require('./config/logger');
 const app    = require('./app');
 const { sequelize } = require('./models');
@@ -53,7 +56,11 @@ function fatal(kind, err) {
   if (crashing) return;
   crashing = true;
   // Se intenta avisar antes de cerrar; shutdown() fuerza la salida a los 10 s de todos modos
-  sendAlert(kind, { summary: `el proceso se reinicia por ${kind} (${err?.name || 'Error'})` })
+  errorTracking.captureError(err instanceof Error ? err : new Error(String(err)), { status: kind });
+  Promise.all([
+    sendAlert(kind, { summary: `el proceso se reinicia por ${kind} (${err?.name || 'Error'})` }),
+    errorTracking.flush(3000),
+  ])
     .catch(() => {})
     .finally(() => shutdown(kind));
 }

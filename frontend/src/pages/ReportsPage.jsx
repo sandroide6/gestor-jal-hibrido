@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ResponsiveContainer,
   PieChart, Pie, Cell,
@@ -108,7 +108,11 @@ export default function ReportsPage() {
     }
   }, [token]);
 
-  useEffect(() => { loadStats(applied); }, [loadStats]);
+  // Carga inicial (y al cambiar de sesión) con los filtros aplicados en ese momento; aplicar
+  // filtros nuevos llama a loadStats directamente, así que el efecto no depende de ellos.
+  const appliedRef = useRef(applied);
+  appliedRef.current = applied;
+  useEffect(() => { loadStats(appliedRef.current); }, [loadStats]);
 
   function setField(k, v) { setFilters((f) => ({ ...f, [k]: v })); }
 

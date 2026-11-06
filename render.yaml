@@ -104,3 +104,6 @@ services:
       # ALERT_WEBHOOK_URL: ntfy.sh, Slack o Discord (opcional pero recomendado).
       - key: ALERT_WEBHOOK_URL
         sync: false
+      # SENTRY_DSN: registro de errores (opcional). Sin él, Sentry queda inactivo.
+      - key: SENTRY_DSN
+        sync: false

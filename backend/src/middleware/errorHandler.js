@@ -2,6 +2,7 @@
 const logger = require('../config/logger');
 const E = require('../config/errorCodes');
 const { sendAlert } = require('../services/alertService');
+const errorTracking = require('../services/errorTracking');
 
 // Errores de Sequelize que significan "no hay base", no "la petición está mal" ni un
 // fallo del código. Se responden 503 con Retry-After (auditoría 2026-11-05, P2-3):
@@ -41,6 +42,7 @@ function errorHandler(err, req, res, next) {
 
   if (status >= 500) {
     sendAlert(`5xx:${err.name || 'Error'}`, { summary: `error interno ${status} (${err.name || 'Error'})`, path: req.originalUrl, requestId }).catch(() => {});
+    errorTracking.captureError(err, { requestId, method: req.method, path: req.originalUrl, status });
     logger.error('Unhandled error', { requestId, status, message: err.message, method: req.method, url: req.originalUrl, stack: err.stack });
   } else {
     logger.warn('Client error', { requestId, status, message, method: req.method, url: req.originalUrl });
